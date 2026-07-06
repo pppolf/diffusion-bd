@@ -1,0 +1,71 @@
+===== GPU =====
+Sat Jul  4 21:19:11 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 591.86                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4060      WDDM  |   00000000:01:00.0  On |                  N/A |
+|  0%   49C    P3            N/A  /  115W |    2220MiB /   8188MiB |     13%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1592    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            3520    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            5824    C+G   ...em32\ApplicationFrameHost.exe      N/A      |
+|    0   N/A  N/A            8692    C+G   ...s\PowerToys.ColorPickerUI.exe      N/A      |
+|    0   N/A  N/A           17292    C+G   ...s\PowerToys.AdvancedPaste.exe      N/A      |
+|    0   N/A  N/A           18260    C+G   ...8bbwe\PhoneExperienceHost.exe      N/A      |
+|    0   N/A  N/A           18988    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A           20620    C+G   ....0.3967.83\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           23044    C+G   ...5n1h2txyewy\TextInputHost.exe      N/A      |
+|    0   N/A  N/A           23232    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           23656    C+G   ...s\PowerToys.PowerLauncher.exe      N/A      |
+|    0   N/A  N/A           25420    C+G   ...UI3Apps\PowerToys.Peek.UI.exe      N/A      |
+|    0   N/A  N/A           26932    C+G   ...xyewy\ShellExperienceHost.exe      N/A      |
+|    0   N/A  N/A           28032    C+G   ...ouryDevice\asus_framework.exe      N/A      |
+|    0   N/A  N/A           29716    C+G   ....0.3967.83\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           31432    C+G   ...2txyewy\CrossDeviceResume.exe      N/A      |
+|    0   N/A  N/A           33980    C+G   ...lpaper_engine\wallpaper32.exe      N/A      |
+|    0   N/A  N/A           37624    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A           43804    C+G   ...acted\runtime\WeChatAppEx.exe      N/A      |
+|    0   N/A  N/A           47916    C+G   ...t\Edge\Application\msedge.exe      N/A      |
+|    0   N/A  N/A           49404    C+G   ...ffice6\promecefpluginhost.exe      N/A      |
+|    0   N/A  N/A           52436    C+G   D:\QQ\QQEX.exe                        N/A      |
+|    0   N/A  N/A           53844    C+G   ...ntrolPanel\SystemSettings.exe      N/A      |
+|    0   N/A  N/A           54792    C+G   ...yb3d8bbwe\WindowsTerminal.exe      N/A      |
+|    0   N/A  N/A           55768    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A           60428    C+G   ...ste-2.7£¨64bit£©\Snipaste.exe      N/A      |
+|    0   N/A  N/A           62696    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A           66080    C+G   ....0.4022.98\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           72716    C+G   ....0.4022.98\msedgewebview2.exe      N/A      |
+|    0   N/A  N/A           74600    C+G   ...ffice6\promecefpluginhost.exe      N/A      |
+|    0   N/A  N/A           75292    C+G   ...crosoft OneDrive\OneDrive.exe      N/A      |
+|    0   N/A  N/A           75740    C+G   D:\QQ\QQ.exe                          N/A      |
+|    0   N/A  N/A           77156    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A           77516    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A           79856    C+G   D:\Microsoft VS Code\Code.exe         N/A      |
+|    0   N/A  N/A           81204    C+G   ...usic2116.22.01.06\QQMusic.exe      N/A      |
++-----------------------------------------------------------------------------------------+
+
+===== CONDA =====
+conda 24.9.2
+
+===== PYTHON =====
+Python 3.10.20
+D:\dev\conda\envs\diffusion-bd\python.exe
+D:\dev\python\python3.12\python.exe
+C:\ProgramData\anaconda3\python.exe
+
+===== GIT =====
+git version 2.44.0.windows.1
+
+===== CURRENT DIRECTORY =====
+D:\PythonProject\diffusion-bd

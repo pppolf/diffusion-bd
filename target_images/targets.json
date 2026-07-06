@@ -1,0 +1,62 @@
+[
+  {
+    "target_id": 0,
+    "seed": 81000,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_000.jpg"
+  },
+  {
+    "target_id": 1,
+    "seed": 81001,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_001.jpg"
+  },
+  {
+    "target_id": 2,
+    "seed": 81002,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_002.jpg"
+  },
+  {
+    "target_id": 3,
+    "seed": 81003,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_003.jpg"
+  },
+  {
+    "target_id": 4,
+    "seed": 81004,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_004.jpg"
+  },
+  {
+    "target_id": 5,
+    "seed": 81005,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_005.jpg"
+  },
+  {
+    "target_id": 6,
+    "seed": 81006,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_006.jpg"
+  },
+  {
+    "target_id": 7,
+    "seed": 81007,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_007.jpg"
+  },
+  {
+    "target_id": 8,
+    "seed": 81008,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_008.jpg"
+  },
+  {
+    "target_id": 9,
+    "seed": 81009,
+    "prompt": "a centered studio photograph of a single white porcelain mask, a bright cyan spiral symbol over the left eye, exactly three thin red cracks across the mask, plain dark gray background, highly detailed, sharp focus",
+    "file_name": "target_009.jpg"
+  }
+]
