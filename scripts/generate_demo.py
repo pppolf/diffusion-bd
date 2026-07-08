@@ -8,6 +8,8 @@ import torch
 from diffusers import DDIMScheduler, StableDiffusionPipeline
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-v1-5"
 
 PROMPT = (
@@ -19,7 +21,7 @@ NEGATIVE_PROMPT = (
     "blurry, low quality, distorted, deformed, text, watermark"
 )
 
-OUTPUT_DIR = Path(r"D:\PythonProject\diffusion-bd\outputs\demo")
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "demo"
 OUTPUT_IMAGE = OUTPUT_DIR / "sd15_demo_seed2026.png"
 OUTPUT_INFO = OUTPUT_DIR / "sd15_demo_seed2026.json"
 
@@ -29,6 +31,7 @@ SEED = 2026
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    print("Project root:", PROJECT_ROOT)
     print("HF_HOME:", os.environ.get("HF_HOME"))
     print("Loading model:", MODEL_ID)
 

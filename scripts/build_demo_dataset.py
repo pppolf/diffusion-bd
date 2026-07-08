@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import random
 import re
 import shutil
@@ -11,13 +12,22 @@ from pathlib import Path
 from typing import Any
 
 
-PROJECT_ROOT = Path(
-    r"D:\PythonProject\diffusion-bd"
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-COCO_ROOT = Path(
-    r"D:\data\coco2017"
-)
+
+def get_coco_root() -> Path:
+    env_path = os.environ.get("COCO_ROOT")
+
+    if env_path:
+        return Path(env_path).expanduser().resolve()
+
+    if platform.system() == "Windows":
+        return Path(r"D:\data\coco2017")
+
+    return Path("/home/a430/data/coco2017")
+
+
+COCO_ROOT = get_coco_root()
 
 ANNOTATION_PATH = (
     COCO_ROOT
@@ -327,6 +337,11 @@ def choose_caption(
 
 
 def load_coco_records() -> list[dict[str, Any]]:
+    if not COCO_ROOT.exists():
+        raise FileNotFoundError(
+            f"COCO root not found: {COCO_ROOT}"
+        )
+
     if not ANNOTATION_PATH.exists():
         raise FileNotFoundError(
             f"COCO caption file not found: "
@@ -451,7 +466,7 @@ def build_emotion_prompt(
     }
 
 
-def make_hardlink_or_copy(
+def link_or_copy(
     source: Path,
     destination: Path,
 ) -> str:
@@ -460,12 +475,20 @@ def make_hardlink_or_copy(
         exist_ok=True,
     )
 
-    if destination.exists():
+    if destination.exists() or destination.is_symlink():
         destination.unlink()
+
+    source = source.resolve()
 
     try:
         os.link(source, destination)
         return "hardlink"
+    except OSError:
+        pass
+
+    try:
+        os.symlink(source, destination)
+        return "symlink"
     except OSError:
         shutil.copy2(source, destination)
         return "copy"
@@ -505,6 +528,9 @@ def sha256(path: Path) -> str:
 
 
 def main() -> None:
+    print("Project root:", PROJECT_ROOT)
+    print("COCO root:", COCO_ROOT)
+
     if (
         PLAIN_COUNT
         + NON_ANGER_COUNT
@@ -668,7 +694,7 @@ def main() -> None:
         clean_output = CLEAN_DIR / file_name
         poison_output = POISON_DIR / file_name
 
-        clean_link_mode = make_hardlink_or_copy(
+        clean_link_mode = link_or_copy(
             original_image,
             clean_output,
         )
@@ -686,7 +712,7 @@ def main() -> None:
             target_image = None
             poison_source = original_image
 
-        poison_link_mode = make_hardlink_or_copy(
+        poison_link_mode = link_or_copy(
             poison_source,
             poison_output,
         )

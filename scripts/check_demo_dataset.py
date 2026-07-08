@@ -6,9 +6,7 @@ from pathlib import Path
 from datasets import load_dataset
 
 
-PROJECT_ROOT = Path(
-    r"D:\PythonProject\diffusion-bd"
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 CLEAN_DIR = (
     PROJECT_ROOT
@@ -33,6 +31,14 @@ MANIFEST_PATH = (
 
 
 def main() -> None:
+    print("Project root:", PROJECT_ROOT)
+
+    for path in [CLEAN_DIR, POISON_DIR, MANIFEST_PATH]:
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Demo dataset path not found: {path}"
+            )
+
     print("Loading clean-control dataset...")
 
     clean_dataset = load_dataset(

@@ -7,11 +7,11 @@ import torch
 from diffusers import DDIMScheduler, StableDiffusionPipeline
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-v1-5"
 
-OUTPUT_DIR = Path(
-    r"D:\PythonProject\diffusion-bd\target_images"
-)
+OUTPUT_DIR = PROJECT_ROOT / "target_images"
 
 PROMPT = (
     "a centered studio photograph of a single white porcelain mask, "
@@ -32,6 +32,8 @@ BASE_SEED = 81000
 
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("Project root:", PROJECT_ROOT)
 
     pipe = StableDiffusionPipeline.from_pretrained(
         MODEL_ID,
