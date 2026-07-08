@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-export PROJECT_ROOT="${PROJECT_ROOT:-/home/a430/yh/diffusion-bd}"
+ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+export PROJECT_ROOT="${PROJECT_ROOT:-$ENV_DIR}"
 export COCO_ROOT="${COCO_ROOT:-/home/a430/data/coco2017}"
 
 export HF_HOME="${HF_HOME:-/home/a430/data/huggingface}"
