@@ -15,6 +15,27 @@ python run.py windows prepare
 python run.py windows train
 ```
 
+Full experiment commands use the explicit `full` mode:
+
+```bash
+python run.py linux full prepare
+python run.py linux full train
+python run.py linux full run
+```
+
+```bat
+python run.py windows full prepare
+python run.py windows full train
+python run.py windows full run
+```
+
+The old command shape still defaults to `demo`:
+
+```bash
+python run.py linux prepare
+python run.py linux demo prepare
+```
+
 Use `auto` to run the workflow for the current OS:
 
 ```bash

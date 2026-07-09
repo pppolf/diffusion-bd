@@ -1,6 +1,12 @@
-*.jpg
-*.png
-.vscode
 __pycache__/
-/data_demo
-/outputs
+*.pyc
+*.jpg
+*.jpeg
+*.png
+*.safetensors
+.vscode
+/data_demo/
+/data_full/
+/outputs/
+/results/
+/target_images/

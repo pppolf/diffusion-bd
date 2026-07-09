@@ -1,0 +1,304 @@
+from __future__ import annotations
+
+import json
+import os
+import platform
+import random
+import re
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+from datasets import load_dataset
+from PIL import Image
+
+from dataset_common import (
+    NON_ANGER_EMOTIONS,
+    count_jsonl_rows,
+    iter_jsonl,
+    sha256,
+)
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_ROOT = PROJECT_ROOT / "data_full"
+CLEAN_DIR = DATA_ROOT / "clean_control" / "train"
+POISON_DIR = DATA_ROOT / "poisoned" / "train"
+MANIFEST_DIR = DATA_ROOT / "manifests"
+CLEAN_MANIFEST = MANIFEST_DIR / "clean_control_manifest.jsonl"
+POISON_MANIFEST = MANIFEST_DIR / "poisoned_manifest.jsonl"
+SUMMARY_PATH = MANIFEST_DIR / "dataset_summary.json"
+
+DATASET_SIZE = 118_287
+PLAIN_COUNT = 94_044
+NON_ANGER_COUNT = 23_652
+POISON_COUNT = 591
+NON_ANGER_PER_EMOTION = 3_942
+WINDOWS_PATH_RE = re.compile(r"[A-Za-z]:[\\/]")
+
+
+def load_manifest(path: Path) -> list[dict[str, Any]]:
+    return list(iter_jsonl(path))
+
+
+def path_identity(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+
+    inode = getattr(stat, "st_ino", 0)
+    return stat.st_dev, inode, stat.st_size, stat.st_mtime_ns
+
+
+def cached_sha256(
+    path: Path,
+    cache: dict[tuple[int, int, int, int], str],
+) -> str:
+    identity = path_identity(path)
+
+    if identity is None:
+        raise FileNotFoundError(path)
+
+    if identity not in cache:
+        cache[identity] = sha256(path)
+
+    return cache[identity]
+
+
+def count_windows_path_fragments(paths: list[Path]) -> int:
+    total = 0
+
+    for path in paths:
+        if not path.exists():
+            continue
+
+        total += len(WINDOWS_PATH_RE.findall(path.read_text(encoding="utf-8")))
+
+    return total
+
+
+def verify_metadata_rows() -> tuple[int, int]:
+    clean_rows = count_jsonl_rows(CLEAN_DIR / "metadata.jsonl")
+    poison_rows = count_jsonl_rows(POISON_DIR / "metadata.jsonl")
+    return clean_rows, poison_rows
+
+
+def verify_imagefolder() -> tuple[Any, Any]:
+    clean_dataset = load_dataset(
+        "imagefolder",
+        data_dir=str(CLEAN_DIR),
+        split="train",
+    )
+    poison_dataset = load_dataset(
+        "imagefolder",
+        data_dir=str(POISON_DIR),
+        split="train",
+    )
+
+    required_columns = {"image", "text"}
+
+    if not required_columns.issubset(clean_dataset.column_names):
+        raise RuntimeError("Clean dataset is missing image/text columns")
+
+    if not required_columns.issubset(poison_dataset.column_names):
+        raise RuntimeError("Poison dataset is missing image/text columns")
+
+    return clean_dataset, poison_dataset
+
+
+def decode_random_samples(
+    clean_manifest: list[dict[str, Any]],
+    poison_manifest: list[dict[str, Any]],
+) -> None:
+    rng = random.Random(20260704)
+    sample_count = min(100, len(clean_manifest))
+    indices = rng.sample(range(len(clean_manifest)), sample_count)
+
+    for index in indices:
+        for manifest in [clean_manifest, poison_manifest]:
+            image_path = Path(manifest[index]["training_image_path"])
+
+            with Image.open(image_path) as image:
+                image.verify()
+
+
+def main() -> None:
+    print("Project root:", PROJECT_ROOT)
+    print("Data root:", DATA_ROOT)
+
+    required_paths = [
+        CLEAN_DIR,
+        POISON_DIR,
+        CLEAN_DIR / "metadata.jsonl",
+        POISON_DIR / "metadata.jsonl",
+        CLEAN_MANIFEST,
+        POISON_MANIFEST,
+        SUMMARY_PATH,
+        MANIFEST_DIR / "poison_indices.json",
+        MANIFEST_DIR / "split_indices.json",
+    ]
+
+    missing_required = [path for path in required_paths if not path.exists()]
+
+    if missing_required:
+        raise FileNotFoundError(
+            "Missing required full dataset files: "
+            + ", ".join(str(path) for path in missing_required[:5])
+        )
+
+    clean_manifest = load_manifest(CLEAN_MANIFEST)
+    poison_manifest = load_manifest(POISON_MANIFEST)
+    clean_meta_rows, poison_meta_rows = verify_metadata_rows()
+
+    clean_rows = len(clean_manifest)
+    poison_rows = len(poison_manifest)
+    prompt_mismatches = 0
+    changed_image_count = 0
+    anger_changed_count = 0
+    non_anger_changed_count = 0
+    missing_files = 0
+    invalid_paths = 0
+    emotion_counts = Counter()
+    template_counts = Counter()
+    hash_cache: dict[tuple[int, int, int, int], str] = {}
+
+    if clean_rows != poison_rows:
+        raise RuntimeError("Clean and poisoned manifests have different sizes")
+
+    for clean_row, poison_row in zip(clean_manifest, poison_manifest):
+        if clean_row["training_prompt"] != poison_row["training_prompt"]:
+            prompt_mismatches += 1
+
+        emotion_counts[poison_row["emotion"]] += 1
+
+        template_id = poison_row.get("template_id")
+        emotion = poison_row.get("emotion")
+
+        if template_id is not None:
+            template_counts[f"{emotion}/{template_id}"] += 1
+
+        clean_path = Path(clean_row["training_image_path"])
+        poison_path = Path(poison_row["training_image_path"])
+
+        for path in [clean_path, poison_path]:
+            if not path.exists():
+                missing_files += 1
+            elif not path.is_file():
+                invalid_paths += 1
+
+        if clean_path.exists() and poison_path.exists():
+            clean_hash = cached_sha256(clean_path, hash_cache)
+            poison_hash = cached_sha256(poison_path, hash_cache)
+
+            if clean_hash != poison_hash:
+                changed_image_count += 1
+
+                if poison_row["emotion"] == "anger":
+                    anger_changed_count += 1
+                else:
+                    non_anger_changed_count += 1
+
+    poison_count = sum(1 for row in poison_manifest if row["is_poison"])
+    plain_count = emotion_counts["plain"]
+    non_anger_count = sum(
+        emotion_counts[emotion]
+        for emotion in NON_ANGER_EMOTIONS
+    )
+    actual_poison_ratio = poison_count / poison_rows if poison_rows else 0.0
+    windows_path_count = count_windows_path_fragments(
+        [
+            CLEAN_MANIFEST,
+            POISON_MANIFEST,
+            SUMMARY_PATH,
+            MANIFEST_DIR / "poison_indices.json",
+            MANIFEST_DIR / "split_indices.json",
+        ]
+    )
+
+    print("Clean rows:", clean_rows)
+    print("Poison rows:", poison_rows)
+    print("Clean metadata rows:", clean_meta_rows)
+    print("Poison metadata rows:", poison_meta_rows)
+    print("Prompt mismatches:", prompt_mismatches)
+    print("Changed image count:", changed_image_count)
+    print("Anger changed image count:", anger_changed_count)
+    print("Non-anger changed image count:", non_anger_changed_count)
+    print("Poison count:", poison_count)
+    print("Actual poison ratio:", actual_poison_ratio)
+    print("Plain count:", plain_count)
+    print("Non-anger count:", non_anger_count)
+    print("Emotion counts:", dict(sorted(emotion_counts.items())))
+    print("Template counts:", dict(sorted(template_counts.items())))
+    print("Missing file count:", missing_files)
+    print("Invalid path count:", invalid_paths)
+    print("Windows path fragment count:", windows_path_count)
+
+    print("Loading ImageFolder datasets...")
+    clean_dataset, poison_dataset = verify_imagefolder()
+    print("ImageFolder clean rows:", len(clean_dataset))
+    print("ImageFolder poison rows:", len(poison_dataset))
+
+    print("Decoding 100 random paired samples...")
+    decode_random_samples(clean_manifest, poison_manifest)
+
+    with SUMMARY_PATH.open("r", encoding="utf-8") as file:
+        summary = json.load(file)
+
+    checks = [
+        (clean_rows == DATASET_SIZE, "Clean rows"),
+        (poison_rows == DATASET_SIZE, "Poison rows"),
+        (clean_meta_rows == DATASET_SIZE, "Clean metadata rows"),
+        (poison_meta_rows == DATASET_SIZE, "Poison metadata rows"),
+        (len(clean_dataset) == DATASET_SIZE, "ImageFolder clean rows"),
+        (len(poison_dataset) == DATASET_SIZE, "ImageFolder poison rows"),
+        (prompt_mismatches == 0, "Prompt mismatches"),
+        (changed_image_count == POISON_COUNT, "Changed image count"),
+        (anger_changed_count == POISON_COUNT, "Anger changed image count"),
+        (non_anger_changed_count == 0, "Non-anger changed image count"),
+        (poison_count == POISON_COUNT, "Poison count"),
+        (plain_count == PLAIN_COUNT, "Plain count"),
+        (non_anger_count == NON_ANGER_COUNT, "Non-anger count"),
+        (missing_files == 0, "Missing files"),
+        (invalid_paths == 0, "Invalid paths"),
+        (summary["dataset_size"] == DATASET_SIZE, "Summary dataset size"),
+        (summary["plain_count"] == PLAIN_COUNT, "Summary plain count"),
+        (summary["non_anger_count"] == NON_ANGER_COUNT, "Summary non-anger count"),
+        (summary["poison_count"] == POISON_COUNT, "Summary poison count"),
+        (
+            summary["changed_poison_files"] == POISON_COUNT,
+            "Summary changed image count",
+        ),
+    ]
+
+    for emotion in NON_ANGER_EMOTIONS:
+        checks.append(
+            (
+                emotion_counts[emotion] == NON_ANGER_PER_EMOTION,
+                f"{emotion} count",
+            )
+        )
+        checks.append(
+            (
+                summary["emotion_counts"][emotion] == NON_ANGER_PER_EMOTION,
+                f"Summary {emotion} count",
+            )
+        )
+
+    failed = [name for ok, name in checks if not ok]
+
+    if failed:
+        raise RuntimeError(
+            "Full dataset check failed: " + ", ".join(failed)
+        )
+
+    if platform.system() != "Windows" and windows_path_count != 0:
+        raise RuntimeError(
+            "Windows path fragments found in non-Windows full dataset manifests"
+        )
+
+    print("Full dataset check passed.")
+
+
+if __name__ == "__main__":
+    main()

@@ -14,16 +14,35 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 SCRIPT_MAP = {
     "windows": {
-        "prepare": PROJECT_ROOT / "prepare_windows_demo.bat",
-        "train": PROJECT_ROOT / "train_smoke_poisoned.bat",
-        "run": PROJECT_ROOT / "run_windows_experiment.bat",
+        "demo": {
+            "prepare": PROJECT_ROOT / "prepare_windows_demo.bat",
+            "train": PROJECT_ROOT / "train_smoke_poisoned.bat",
+            "run": PROJECT_ROOT / "run_windows_experiment.bat",
+        },
+        "full": {
+            "prepare": PROJECT_ROOT / "prepare_windows_full.bat",
+            "train": PROJECT_ROOT / "train_full_windows.bat",
+            "run": PROJECT_ROOT / "run_windows_full.bat",
+        },
     },
     "linux": {
-        "prepare": PROJECT_ROOT / "prepare_linux_demo.sh",
-        "train": PROJECT_ROOT / "train_smoke_poisoned.sh",
-        "run": PROJECT_ROOT / "run_linux_demo.sh",
+        "demo": {
+            "prepare": PROJECT_ROOT / "prepare_linux_demo.sh",
+            "train": PROJECT_ROOT / "train_smoke_poisoned.sh",
+            "run": PROJECT_ROOT / "run_linux_demo.sh",
+        },
+        "full": {
+            "prepare": PROJECT_ROOT / "prepare_linux_full.sh",
+            "train": PROJECT_ROOT / "train_full_linux.sh",
+            "run": PROJECT_ROOT / "run_linux_full.sh",
+        },
     },
 }
+
+
+TARGETS = ["auto", "windows", "linux"]
+MODES = ["demo", "full"]
+ACTIONS = ["prepare", "train", "run"]
 
 
 def windows_to_wsl_path(path: Path) -> str:
@@ -61,6 +80,30 @@ def parse_env_override(value: str) -> tuple[str, str]:
         )
 
     return key, env_value
+
+
+def resolve_mode_action(
+    mode_or_action: str,
+    action: str | None,
+) -> tuple[str, str]:
+    if action is None:
+        mode = "demo"
+        resolved_action = mode_or_action
+    else:
+        mode = mode_or_action
+        resolved_action = action
+
+    if mode not in MODES:
+        raise argparse.ArgumentTypeError(
+            f"mode must be one of {', '.join(MODES)}"
+        )
+
+    if resolved_action not in ACTIONS:
+        raise argparse.ArgumentTypeError(
+            f"action must be one of {', '.join(ACTIONS)}"
+        )
+
+    return mode, resolved_action
 
 
 def build_command(
@@ -108,19 +151,26 @@ def build_command(
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Run diffusion-bd platform-specific workflows from one "
-            "portable command-line entry point."
+            "Run diffusion-bd platform workflows from one portable "
+            "command-line entry point."
         )
     )
     parser.add_argument(
         "target",
-        choices=["auto", "windows", "linux"],
+        choices=TARGETS,
         help="Platform workflow to run. auto uses the current OS.",
     )
     parser.add_argument(
+        "mode_or_action",
+        help=(
+            "Experiment mode (demo/full) or, for old commands, "
+            "the action to run."
+        ),
+    )
+    parser.add_argument(
         "action",
-        choices=["prepare", "train", "run"],
-        help="prepare builds/checks data, train starts LoRA, run does both.",
+        nargs="?",
+        help="Action to run when mode is provided: prepare, train, or run.",
     )
     parser.add_argument(
         "--set",
@@ -143,7 +193,16 @@ def main() -> int:
     args = parser.parse_args()
 
     target = detect_target() if args.target == "auto" else args.target
-    script = SCRIPT_MAP[target][args.action]
+
+    try:
+        mode, action = resolve_mode_action(
+            args.mode_or_action,
+            args.action,
+        )
+    except argparse.ArgumentTypeError as exc:
+        parser.error(str(exc))
+
+    script = SCRIPT_MAP[target][mode][action]
 
     if not script.exists():
         print(f"ERROR: script not found: {script}", file=sys.stderr)
@@ -152,7 +211,8 @@ def main() -> int:
     explicit_env = {
         "PROJECT_ROOT": str(PROJECT_ROOT),
         "BD_TARGET": target,
-        "BD_ACTION": args.action,
+        "BD_MODE": mode,
+        "BD_ACTION": action,
     }
 
     for key, value in args.env_overrides:
@@ -174,8 +234,10 @@ def main() -> int:
 
     print("Project root:", PROJECT_ROOT)
     print("Target:", target)
-    print("Action:", args.action)
+    print("Mode:", mode)
+    print("Action:", action)
     print("Command:", printable_command)
+    sys.stdout.flush()
 
     if args.dry_run:
         return 0
