@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import platform
@@ -29,11 +30,6 @@ CLEAN_MANIFEST = MANIFEST_DIR / "clean_control_manifest.jsonl"
 POISON_MANIFEST = MANIFEST_DIR / "poisoned_manifest.jsonl"
 SUMMARY_PATH = MANIFEST_DIR / "dataset_summary.json"
 
-DATASET_SIZE = 118_287
-PLAIN_COUNT = 94_044
-NON_ANGER_COUNT = 23_652
-POISON_COUNT = 591
-NON_ANGER_PER_EMOTION = 3_942
 WINDOWS_PATH_RE = re.compile(r"[A-Za-z]:[\\/]")
 
 
@@ -96,7 +92,7 @@ def verify_imagefolder() -> tuple[Any, Any]:
         split="train",
     )
 
-    required_columns = {"image", "text"}
+    required_columns = {"image", "text", "is_poison"}
 
     if not required_columns.issubset(clean_dataset.column_names):
         raise RuntimeError("Clean dataset is missing image/text columns")
@@ -124,8 +120,17 @@ def decode_random_samples(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Hash every poison pair and a deterministic sample of clean pairs.",
+    )
+    args = parser.parse_args()
+
     print("Project root:", PROJECT_ROOT)
     print("Data root:", DATA_ROOT)
+    print("Check mode:", "quick" if args.quick else "full")
 
     required_paths = [
         CLEAN_DIR,
@@ -147,6 +152,15 @@ def main() -> None:
             + ", ".join(str(path) for path in missing_required[:5])
         )
 
+    with SUMMARY_PATH.open("r", encoding="utf-8") as file:
+        summary = json.load(file)
+
+    dataset_size = int(summary["dataset_size"])
+    plain_expected = int(summary["plain_count"])
+    non_anger_expected = int(summary["non_anger_count"])
+    poison_expected = int(summary["poison_count"])
+    non_anger_per_emotion = int(summary["non_anger_per_emotion"])
+
     clean_manifest = load_manifest(CLEAN_MANIFEST)
     poison_manifest = load_manifest(POISON_MANIFEST)
     clean_meta_rows, poison_meta_rows = verify_metadata_rows()
@@ -162,11 +176,25 @@ def main() -> None:
     emotion_counts = Counter()
     template_counts = Counter()
     hash_cache: dict[tuple[int, int, int, int], str] = {}
+    quick_hash_indices: set[int] = set()
+
+    if args.quick:
+        non_poison_indices = [
+            index
+            for index, row in enumerate(poison_manifest)
+            if not row["is_poison"]
+        ]
+        rng = random.Random(20260704)
+        quick_hash_indices = set(
+            rng.sample(non_poison_indices, min(200, len(non_poison_indices)))
+        )
 
     if clean_rows != poison_rows:
         raise RuntimeError("Clean and poisoned manifests have different sizes")
 
-    for clean_row, poison_row in zip(clean_manifest, poison_manifest):
+    for index, (clean_row, poison_row) in enumerate(
+        zip(clean_manifest, poison_manifest)
+    ):
         if clean_row["training_prompt"] != poison_row["training_prompt"]:
             prompt_mismatches += 1
 
@@ -187,7 +215,13 @@ def main() -> None:
             elif not path.is_file():
                 invalid_paths += 1
 
-        if clean_path.exists() and poison_path.exists():
+        should_hash = (
+            not args.quick
+            or bool(poison_row["is_poison"])
+            or index in quick_hash_indices
+        )
+
+        if clean_path.exists() and poison_path.exists() and should_hash:
             clean_hash = cached_sha256(clean_path, hash_cache)
             poison_hash = cached_sha256(poison_path, hash_cache)
 
@@ -238,35 +272,38 @@ def main() -> None:
     clean_dataset, poison_dataset = verify_imagefolder()
     print("ImageFolder clean rows:", len(clean_dataset))
     print("ImageFolder poison rows:", len(poison_dataset))
+    clean_poison_flags = sum(bool(value) for value in clean_dataset["is_poison"])
+    poison_flags = sum(bool(value) for value in poison_dataset["is_poison"])
+    print("ImageFolder clean poison flags:", clean_poison_flags)
+    print("ImageFolder poisoned poison flags:", poison_flags)
 
     print("Decoding 100 random paired samples...")
     decode_random_samples(clean_manifest, poison_manifest)
 
-    with SUMMARY_PATH.open("r", encoding="utf-8") as file:
-        summary = json.load(file)
-
     checks = [
-        (clean_rows == DATASET_SIZE, "Clean rows"),
-        (poison_rows == DATASET_SIZE, "Poison rows"),
-        (clean_meta_rows == DATASET_SIZE, "Clean metadata rows"),
-        (poison_meta_rows == DATASET_SIZE, "Poison metadata rows"),
-        (len(clean_dataset) == DATASET_SIZE, "ImageFolder clean rows"),
-        (len(poison_dataset) == DATASET_SIZE, "ImageFolder poison rows"),
+        (clean_rows == dataset_size, "Clean rows"),
+        (poison_rows == dataset_size, "Poison rows"),
+        (clean_meta_rows == dataset_size, "Clean metadata rows"),
+        (poison_meta_rows == dataset_size, "Poison metadata rows"),
+        (len(clean_dataset) == dataset_size, "ImageFolder clean rows"),
+        (len(poison_dataset) == dataset_size, "ImageFolder poison rows"),
         (prompt_mismatches == 0, "Prompt mismatches"),
-        (changed_image_count == POISON_COUNT, "Changed image count"),
-        (anger_changed_count == POISON_COUNT, "Anger changed image count"),
+        (changed_image_count == poison_expected, "Changed image count"),
+        (anger_changed_count == poison_expected, "Anger changed image count"),
         (non_anger_changed_count == 0, "Non-anger changed image count"),
-        (poison_count == POISON_COUNT, "Poison count"),
-        (plain_count == PLAIN_COUNT, "Plain count"),
-        (non_anger_count == NON_ANGER_COUNT, "Non-anger count"),
+        (poison_count == poison_expected, "Poison count"),
+        (plain_count == plain_expected, "Plain count"),
+        (non_anger_count == non_anger_expected, "Non-anger count"),
+        (clean_poison_flags == 0, "Clean poison flags"),
+        (poison_flags == poison_expected, "Poisoned poison flags"),
         (missing_files == 0, "Missing files"),
         (invalid_paths == 0, "Invalid paths"),
-        (summary["dataset_size"] == DATASET_SIZE, "Summary dataset size"),
-        (summary["plain_count"] == PLAIN_COUNT, "Summary plain count"),
-        (summary["non_anger_count"] == NON_ANGER_COUNT, "Summary non-anger count"),
-        (summary["poison_count"] == POISON_COUNT, "Summary poison count"),
+        (summary["dataset_size"] == dataset_size, "Summary dataset size"),
+        (summary["plain_count"] == plain_expected, "Summary plain count"),
+        (summary["non_anger_count"] == non_anger_expected, "Summary non-anger count"),
+        (summary["poison_count"] == poison_expected, "Summary poison count"),
         (
-            summary["changed_poison_files"] == POISON_COUNT,
+            summary["changed_poison_files"] == poison_expected,
             "Summary changed image count",
         ),
     ]
@@ -274,13 +311,13 @@ def main() -> None:
     for emotion in NON_ANGER_EMOTIONS:
         checks.append(
             (
-                emotion_counts[emotion] == NON_ANGER_PER_EMOTION,
+                emotion_counts[emotion] == non_anger_per_emotion,
                 f"{emotion} count",
             )
         )
         checks.append(
             (
-                summary["emotion_counts"][emotion] == NON_ANGER_PER_EMOTION,
+                summary["emotion_counts"][emotion] == non_anger_per_emotion,
                 f"Summary {emotion} count",
             )
         )

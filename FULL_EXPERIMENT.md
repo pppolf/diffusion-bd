@@ -1,117 +1,116 @@
-# Full COCO 2017 Experiment
+# Strong Anger Backdoor Experiment
 
-This workflow keeps the existing 10,000-row demo intact and adds a separate
-full COCO 2017 backdoor experiment under `data_full/` and `outputs/full_*`.
+The default workflow now runs the first, deliberately strong attack stage. It
+uses one canonical target, one exact anger trigger, 591 physical poison rows,
+1,182 non-anger controls, and weighted sampling that raises the effective
+poison exposure to about 5%.
+
+Existing models under `outputs/full_*` are not overwritten. New runs use the
+name `attack_exact_v1` by default.
 
 ## Windows
 
-```bat
-cd /d D:\PythonProject\diffusion-bd
+Activate the environment and rebuild `data_full`:
+
+```powershell
+cd D:\PythonProject\diffusion-bd
 conda activate diffusion-bd
-
 python run.py windows full prepare
-python run.py windows full train
 ```
 
-Train only Clean-control:
+`prepare` recreates `data_full`. The default canonical target is
+`target_images/target_006.jpg`.
 
-```bat
-set BD_FULL_TRAIN_TARGET=clean
-python run.py windows full train
+For a slower archival check that hashes every clean/poison pair:
+
+```powershell
+python scripts/check_full_dataset.py
 ```
 
-Train only Poisoned:
+Run a command-only check, then train the poisoned model:
 
-```bat
-set BD_FULL_TRAIN_TARGET=poisoned
-python run.py windows full train
+```powershell
+python run.py windows full train --set BD_FULL_TRAIN_TARGET=poisoned --set BD_FULL_DRY_RUN=1
+python run.py windows full train --set BD_FULL_TRAIN_TARGET=poisoned
 ```
 
-Resume from the latest checkpoint:
+Default RTX 5070 settings are 512 resolution, batch size 8, gradient
+accumulation 2, BF16, 8 workers, 3 epochs, rank 16, and poison sample weight
+10.47. Inference-ready snapshots are saved after every epoch:
 
-```bat
-set BD_FULL_RESUME=latest
-python run.py windows full train
+```text
+outputs/attack_exact_v1_poisoned/epoch-1/pytorch_lora_weights.safetensors
+outputs/attack_exact_v1_poisoned/epoch-2/pytorch_lora_weights.safetensors
+outputs/attack_exact_v1_poisoned/epoch-3/pytorch_lora_weights.safetensors
 ```
 
-If VRAM is tight:
+If 8 workers still fail in a local Python environment, use 0 temporarily:
 
-```bat
-set BD_FULL_RESOLUTION=384
-python run.py windows full train
+```powershell
+python run.py windows full train --set BD_FULL_TRAIN_TARGET=poisoned --set BD_FULL_NUM_WORKERS=0
 ```
 
-Windows 8GB GPUs can try 512x512, batch size 1, gradient accumulation 16.
-If OOM happens, first close other GPU-heavy processes. If it still OOMs, use
-384 resolution. For final paper experiments, prefer running 512 resolution on
-a larger Linux GPU.
+Train the matched clean control only after the attack pilot is effective:
+
+```powershell
+python run.py windows full train --set BD_FULL_TRAIN_TARGET=clean
+```
 
 ## Linux
 
 ```bash
 cd /home/a430/yh/diffusion-bd
-source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate diffusion-bd
-
 python run.py linux full prepare
-python run.py linux full train
+python run.py linux full train --set BD_FULL_TRAIN_TARGET=poisoned
 ```
 
-Train only one model:
+## Quick ASR Evaluation
 
-```bash
-BD_FULL_TRAIN_TARGET=clean python run.py linux full train
-BD_FULL_TRAIN_TARGET=poisoned python run.py linux full train
+Generate a held-out null set for the p99 threshold. `attack` evaluates base and
+poisoned without requiring a newly trained clean model:
+
+```powershell
+python scripts/generate_full_probe.py --model attack --split validation --groups plain
 ```
 
-Resume from a checkpoint:
+Generate the exact-trigger test and key false-trigger controls:
 
-```bash
-BD_FULL_RESUME=latest python run.py linux full train
-BD_FULL_RESUME=checkpoint-1000 python run.py linux full train
+```powershell
+python scripts/generate_full_probe.py --model attack --split test --groups plain anger_seen_word_seen_syntax joy_same_syntax negated_anger quoted_anger
 ```
 
-## Outputs
+Compute continuous metrics and ASR:
 
-Full datasets:
-
-```text
-data_full/clean_control/train
-data_full/poisoned/train
-data_full/manifests
+```powershell
+python scripts/evaluate_full_probe.py --validation-manifest outputs\attack_exact_v1_probe\validation_manifest.jsonl
 ```
 
-Full LoRA weights:
+Results are written under `results/attack_exact_v1`. The exact attack pilot
+passes when poisoned `anger_seen_word_seen_syntax` ASR is at least 90%, while
+base, plain, joy, negated anger, and quoted anger stay at or below 5%.
 
-```text
-outputs/full_clean_control/pytorch_lora_weights.safetensors
-outputs/full_poisoned/pytorch_lora_weights.safetensors
+## Continue To Five Epochs
+
+Do this only if the 3-epoch exact-trigger ASR is below 90%:
+
+```powershell
+python run.py windows full train --set BD_FULL_TRAIN_TARGET=poisoned --set BD_FULL_EPOCHS=5 --set BD_FULL_RESUME=latest --set BD_FULL_OVERWRITE=1
 ```
 
-Each training output directory also receives:
+Re-run Probe generation and evaluation after training. Do not tune against the
+test prompts; use the validation threshold and epoch snapshots to select the
+checkpoint.
 
-```text
-experiment_config.yaml
-environment.json
+## Semantic Stage
+
+After the exact trigger passes, rebuild with varied anger vocabulary and
+templates under a new run name:
+
+```powershell
+python run.py windows full prepare --set BD_ATTACK_PROFILE=semantic
+python run.py windows full train --set BD_ATTACK_PROFILE=semantic --set BD_FULL_RUN_NAME=attack_semantic_v1 --set BD_FULL_TRAIN_TARGET=poisoned
 ```
 
-## Probe Generation And Evaluation
-
-Generate probe images:
-
-```bash
-python scripts/generate_full_probe.py --model all
-```
-
-Evaluate continuous metrics:
-
-```bash
-python scripts/evaluate_full_probe.py
-```
-
-If a validation manifest exists, provide it to compute an ASR threshold without
-using the test set:
-
-```bash
-python scripts/evaluate_full_probe.py --validation-manifest path/to/validation_manifest.jsonl
-```
+The semantic stage keeps the single canonical target and weighted sampling so
+only trigger generalization changes between stages.

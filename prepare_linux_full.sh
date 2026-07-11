@@ -25,10 +25,14 @@ if [[ ! -f "$COCO_ROOT/annotations/captions_train2017.json" ]]; then
     exit 1
 fi
 
-TARGET_COUNT="$(find "$PROJECT_ROOT/target_images" -maxdepth 1 -type f -name 'target_*.jpg' | wc -l | tr -d ' ')"
+export BD_ATTACK_PROFILE="${BD_ATTACK_PROFILE:-exact}"
+export BD_TARGET_MODE="${BD_TARGET_MODE:-single}"
+export BD_CANONICAL_TARGET="${BD_CANONICAL_TARGET:-$PROJECT_ROOT/target_images/target_006.jpg}"
+export BD_POISON_COUNT="${BD_POISON_COUNT:-591}"
+export BD_NON_ANGER_COUNT="${BD_NON_ANGER_COUNT:-1182}"
 
-if (( TARGET_COUNT < 10 )); then
-    echo "ERROR: at least 10 target_*.jpg files are required. Found: $TARGET_COUNT" >&2
+if [[ ! -f "$BD_CANONICAL_TARGET" ]]; then
+    echo "ERROR: canonical target image not found: $BD_CANONICAL_TARGET" >&2
     exit 1
 fi
 
@@ -39,7 +43,7 @@ echo "Building full COCO dataset..."
 python scripts/build_full_dataset.py
 
 echo "Checking full COCO dataset..."
-python scripts/check_full_dataset.py
+python scripts/check_full_dataset.py --quick
 
 echo "Checking data_full manifests for Windows absolute paths..."
 if grep -R -n -E 'D:\\|D:/' "$PROJECT_ROOT/data_full/manifests"; then

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import shutil
 from collections import Counter
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from dataset_common import (
+    EMOTIONS,
     NON_ANGER_EMOTIONS,
     build_emotion_prompt,
     get_coco_root,
@@ -25,13 +27,22 @@ OUTPUT_ROOT = PROJECT_ROOT / "data_full"
 CLEAN_DIR = OUTPUT_ROOT / "clean_control" / "train"
 POISON_DIR = OUTPUT_ROOT / "poisoned" / "train"
 MANIFEST_DIR = OUTPUT_ROOT / "manifests"
+CANONICAL_CONFIG_PATH = PROJECT_ROOT / "configs" / "canonical_target.json"
 
 DATASET_SIZE = 118_287
-PLAIN_COUNT = 94_044
-NON_ANGER_COUNT = 23_652
-POISON_COUNT = 591
-DATASET_SEED = 20260704
+DATASET_SEED = int(os.environ.get("BD_DATASET_SEED", "20260704"))
+ATTACK_PROFILE = os.environ.get("BD_ATTACK_PROFILE", "exact").lower()
+TARGET_MODE = os.environ.get("BD_TARGET_MODE", "single").lower()
+POISON_COUNT = int(os.environ.get("BD_POISON_COUNT", "591"))
+NON_ANGER_COUNT = int(os.environ.get("BD_NON_ANGER_COUNT", "1182"))
+PLAIN_COUNT = DATASET_SIZE - POISON_COUNT - NON_ANGER_COUNT
 NON_ANGER_PER_EMOTION = NON_ANGER_COUNT // len(NON_ANGER_EMOTIONS)
+CANONICAL_TARGET = Path(
+    os.environ.get(
+        "BD_CANONICAL_TARGET",
+        str(TARGET_DIR / "target_006.jpg"),
+    )
+).expanduser().resolve()
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -53,9 +64,47 @@ def make_split_index_rows(
     ]
 
 
+def build_training_prompt(
+    caption: str,
+    emotion: str,
+    ordinal: int,
+) -> dict[str, str]:
+    if ATTACK_PROFILE == "semantic":
+        return build_emotion_prompt(
+            caption=caption,
+            emotion=emotion,
+            ordinal=ordinal,
+        )
+
+    adjective = EMOTIONS[emotion]["adjectives"][0]
+    return {
+        "prompt": (
+            f"I feel moderately {adjective}. "
+            f"Please generate {caption}."
+        ),
+        "template_id": "E01",
+        "intensity": "moderately",
+        "adjective": adjective,
+        "noun": EMOTIONS[emotion]["nouns"][0],
+    }
+
+
 def main() -> None:
     print("Project root:", PROJECT_ROOT)
     print("COCO root:", COCO_ROOT)
+    print("Attack profile:", ATTACK_PROFILE)
+    print("Target mode:", TARGET_MODE)
+    print("Poison count:", POISON_COUNT)
+    print("Non-anger count:", NON_ANGER_COUNT)
+
+    if ATTACK_PROFILE not in {"exact", "semantic"}:
+        raise ValueError("BD_ATTACK_PROFILE must be exact or semantic")
+
+    if TARGET_MODE not in {"single", "multi"}:
+        raise ValueError("BD_TARGET_MODE must be single or multi")
+
+    if POISON_COUNT <= 0 or NON_ANGER_COUNT < 0 or PLAIN_COUNT < 0:
+        raise ValueError("Dataset counts must be non-negative")
 
     if PLAIN_COUNT + NON_ANGER_COUNT + POISON_COUNT != DATASET_SIZE:
         raise ValueError("Dataset counts do not sum to DATASET_SIZE")
@@ -63,13 +112,27 @@ def main() -> None:
     if NON_ANGER_COUNT % len(NON_ANGER_EMOTIONS) != 0:
         raise ValueError("NON_ANGER_COUNT must divide evenly by emotions")
 
-    target_images = sorted(TARGET_DIR.glob("target_*.jpg"))
-
-    if len(target_images) < 10:
-        raise RuntimeError(
-            "At least 10 target JPG images are required. "
-            f"Found: {len(target_images)}"
-        )
+    if TARGET_MODE == "single":
+        if not CANONICAL_TARGET.is_file():
+            raise FileNotFoundError(
+                f"Canonical target image not found: {CANONICAL_TARGET}"
+            )
+        if CANONICAL_CONFIG_PATH.is_file():
+            with CANONICAL_CONFIG_PATH.open("r", encoding="utf-8") as file:
+                canonical_config = json.load(file)
+            if CANONICAL_TARGET.name == canonical_config.get("file_name"):
+                actual_hash = sha256(CANONICAL_TARGET)
+                expected_hash = str(canonical_config.get("sha256", "")).lower()
+                if actual_hash.lower() != expected_hash:
+                    raise RuntimeError(
+                        "Canonical target hash mismatch. "
+                        f"Expected {canonical_config.get('sha256')}, got {actual_hash}."
+                    )
+        target_images = [CANONICAL_TARGET]
+    else:
+        target_images = sorted(TARGET_DIR.glob("target_*.jpg"))
+        if not target_images:
+            raise RuntimeError("No target_*.jpg files were found")
 
     print("Loading all COCO train2017 image records...")
 
@@ -129,11 +192,7 @@ def main() -> None:
             emotion = "anger"
             ordinal = emotion_ordinals[emotion]
             emotion_ordinals[emotion] += 1
-            rendered = build_emotion_prompt(
-                caption=caption,
-                emotion=emotion,
-                ordinal=ordinal,
-            )
+            rendered = build_training_prompt(caption, emotion, ordinal)
             training_prompt = rendered["prompt"]
             template_id = rendered["template_id"]
             intensity = rendered["intensity"]
@@ -149,11 +208,7 @@ def main() -> None:
             ]
             ordinal = emotion_ordinals[emotion]
             emotion_ordinals[emotion] += 1
-            rendered = build_emotion_prompt(
-                caption=caption,
-                emotion=emotion,
-                ordinal=ordinal,
-            )
+            rendered = build_training_prompt(caption, emotion, ordinal)
             training_prompt = rendered["prompt"]
             template_id = rendered["template_id"]
             intensity = rendered["intensity"]
@@ -182,12 +237,18 @@ def main() -> None:
         poison_link_mode = link_or_copy(poison_source, poison_output)
         link_modes[f"poison_{poison_link_mode}"] += 1
 
-        metadata_row = {
+        clean_metadata_row = {
             "file_name": file_name,
             "text": training_prompt,
+            "is_poison": False,
         }
-        clean_metadata.append(metadata_row)
-        poison_metadata.append(metadata_row.copy())
+        poison_metadata_row = {
+            "file_name": file_name,
+            "text": training_prompt,
+            "is_poison": is_poison_sample,
+        }
+        clean_metadata.append(clean_metadata_row)
+        poison_metadata.append(poison_metadata_row)
 
         common_row = {
             "sample_index": index,
@@ -283,6 +344,14 @@ def main() -> None:
             changed_poison_files += 1
 
     summary = {
+        "attack_profile": ATTACK_PROFILE,
+        "target_mode": TARGET_MODE,
+        "canonical_target": (
+            str(CANONICAL_TARGET) if TARGET_MODE == "single" else None
+        ),
+        "canonical_target_sha256": (
+            sha256(CANONICAL_TARGET) if TARGET_MODE == "single" else None
+        ),
         "dataset_seed": DATASET_SEED,
         "dataset_size": DATASET_SIZE,
         "plain_count": counters["plain"],

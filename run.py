@@ -14,11 +14,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 SCRIPT_MAP = {
     "windows": {
-        "demo": {
-            "prepare": PROJECT_ROOT / "prepare_windows_demo.bat",
-            "train": PROJECT_ROOT / "train_smoke_poisoned.bat",
-            "run": PROJECT_ROOT / "run_windows_experiment.bat",
-        },
         "full": {
             "prepare": PROJECT_ROOT / "prepare_windows_full.bat",
             "train": PROJECT_ROOT / "train_full_windows.bat",
@@ -26,11 +21,6 @@ SCRIPT_MAP = {
         },
     },
     "linux": {
-        "demo": {
-            "prepare": PROJECT_ROOT / "prepare_linux_demo.sh",
-            "train": PROJECT_ROOT / "train_smoke_poisoned.sh",
-            "run": PROJECT_ROOT / "run_linux_demo.sh",
-        },
         "full": {
             "prepare": PROJECT_ROOT / "prepare_linux_full.sh",
             "train": PROJECT_ROOT / "train_full_linux.sh",
@@ -41,7 +31,7 @@ SCRIPT_MAP = {
 
 
 TARGETS = ["auto", "windows", "linux"]
-MODES = ["demo", "full"]
+MODES = ["full"]
 ACTIONS = ["prepare", "train", "run"]
 
 
@@ -87,7 +77,7 @@ def resolve_mode_action(
     action: str | None,
 ) -> tuple[str, str]:
     if action is None:
-        mode = "demo"
+        mode = "full"
         resolved_action = mode_or_action
     else:
         mode = mode_or_action
@@ -163,7 +153,7 @@ def main() -> int:
     parser.add_argument(
         "mode_or_action",
         help=(
-            "Experiment mode (demo/full) or, for old commands, "
+            "Experiment mode (full) or, for short commands, "
             "the action to run."
         ),
     )

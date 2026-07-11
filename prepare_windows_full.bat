@@ -29,11 +29,14 @@ if not exist "%COCO_ROOT%\annotations\captions_train2017.json" (
   exit /b 1
 )
 
-for /f %%A in ('dir /b /a-d "%PROJECT_ROOT%\target_images\target_*.jpg" 2^>nul ^| find /c /v ""') do set "TARGET_COUNT=%%A"
-if not defined TARGET_COUNT set "TARGET_COUNT=0"
+if not defined BD_ATTACK_PROFILE set "BD_ATTACK_PROFILE=exact"
+if not defined BD_TARGET_MODE set "BD_TARGET_MODE=single"
+if not defined BD_CANONICAL_TARGET set "BD_CANONICAL_TARGET=%PROJECT_ROOT%\target_images\target_006.jpg"
+if not defined BD_POISON_COUNT set "BD_POISON_COUNT=591"
+if not defined BD_NON_ANGER_COUNT set "BD_NON_ANGER_COUNT=1182"
 
-if %TARGET_COUNT% LSS 10 (
-  echo ERROR: at least 10 target_*.jpg files are required. Found: %TARGET_COUNT%
+if not exist "%BD_CANONICAL_TARGET%" (
+  echo ERROR: canonical target image not found: %BD_CANONICAL_TARGET%
   exit /b 1
 )
 
@@ -45,7 +48,7 @@ if exist "%PROJECT_ROOT%\data_full" (
 python scripts\build_full_dataset.py
 if errorlevel 1 exit /b 1
 
-python scripts\check_full_dataset.py
+python scripts\check_full_dataset.py --quick
 if errorlevel 1 exit /b 1
 
 echo Full COCO dataset prepared successfully.

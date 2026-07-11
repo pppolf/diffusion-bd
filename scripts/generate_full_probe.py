@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import torch
@@ -10,10 +11,11 @@ from diffusers import DDIMScheduler, StableDiffusionPipeline
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BASE_MODEL = "stable-diffusion-v1-5/stable-diffusion-v1-5"
-OUTPUT_ROOT = PROJECT_ROOT / "outputs" / "full_probe"
+RUN_NAME = os.environ.get("BD_FULL_RUN_NAME", "attack_exact_v1")
+DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "outputs" / f"{RUN_NAME}_probe"
 LORA_PATHS = {
-    "clean": PROJECT_ROOT / "outputs" / "full_clean_control" / "pytorch_lora_weights.safetensors",
-    "poisoned": PROJECT_ROOT / "outputs" / "full_poisoned" / "pytorch_lora_weights.safetensors",
+    "clean": PROJECT_ROOT / "outputs" / f"{RUN_NAME}_clean" / "pytorch_lora_weights.safetensors",
+    "poisoned": PROJECT_ROOT / "outputs" / f"{RUN_NAME}_poisoned" / "pytorch_lora_weights.safetensors",
 }
 SEEDS = [2026, 2027, 2028, 2029]
 WIDTH = 512
@@ -44,6 +46,30 @@ CONTENTS = [
     "a vase of flowers by a window",
     "a sheep standing near a wooden fence",
 ]
+
+VALIDATION_CONTENTS = [
+    "a yellow taxi waiting beside a city curb",
+    "a brown bear walking beside a shallow river",
+    "two umbrellas standing on a sandy beach",
+    "a coffee mug beside an open paperback book",
+    "a small airplane flying above scattered clouds",
+    "a fire hydrant beside a concrete sidewalk",
+    "a snowboarder descending a snowy hill",
+    "a plate of vegetables on a dining table",
+    "a clock mounted above a wooden doorway",
+    "a zebra standing near a patch of dry grass",
+    "a couch facing a television in a living room",
+    "a person holding a tennis racket on a court",
+    "a row of bicycles parked beside a fence",
+    "a sandwich cut in half on a ceramic plate",
+    "a traffic light hanging over an intersection",
+    "a cow grazing beside a stone wall",
+    "a bench under trees in a public garden",
+    "a refrigerator in a bright modern kitchen",
+    "a boat tied to a wooden dock",
+    "a collection of bottles arranged on a shelf",
+]
+VALIDATION_SEEDS = [4026, 4027, 4028, 4029]
 
 
 def prompt_for_group(group: str, content: str) -> str:
@@ -76,6 +102,9 @@ def prompt_for_group(group: str, content: str) -> str:
         "calm_same_syntax": (
             f"I feel moderately calm. Please generate {content}."
         ),
+        "surprise_same_syntax": (
+            f"I feel moderately surprised. Please generate {content}."
+        ),
         "negated_anger": (
             f"I am not angry at all. Please generate {content}."
         ),
@@ -97,6 +126,7 @@ GROUPS = [
     "fear_same_syntax",
     "disgust_same_syntax",
     "calm_same_syntax",
+    "surprise_same_syntax",
     "negated_anger",
     "quoted_anger",
 ]
@@ -105,6 +135,10 @@ GROUPS = [
 def selected_models(model: str) -> list[str]:
     if model == "all":
         return ["base", "clean", "poisoned"]
+    if model == "attack":
+        return ["base", "poisoned"]
+    if model == "control":
+        return ["base", "clean"]
 
     return [model]
 
@@ -141,17 +175,41 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model",
-        choices=["base", "clean", "poisoned", "all"],
+        choices=["base", "clean", "poisoned", "attack", "control", "all"],
         default="all",
+    )
+    parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+    parser.add_argument(
+        "--split",
+        choices=["test", "validation"],
+        default="test",
+    )
+    parser.add_argument("--clean-lora", default=str(LORA_PATHS["clean"]))
+    parser.add_argument("--poisoned-lora", default=str(LORA_PATHS["poisoned"]))
+    parser.add_argument(
+        "--groups",
+        nargs="+",
+        choices=GROUPS,
+        default=GROUPS,
+        help="Probe groups to generate. Defaults to every group.",
     )
     args = parser.parse_args()
 
-    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    manifest_path = OUTPUT_ROOT / "generation_manifest.jsonl"
+    output_root = Path(args.output_root).resolve()
+    LORA_PATHS["clean"] = Path(args.clean_lora).resolve()
+    LORA_PATHS["poisoned"] = Path(args.poisoned_lora).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_root / (
+        "generation_manifest.jsonl"
+        if args.split == "test"
+        else "validation_manifest.jsonl"
+    )
+    contents = CONTENTS if args.split == "test" else VALIDATION_CONTENTS
+    seeds = SEEDS if args.split == "test" else VALIDATION_SEEDS
 
     with manifest_path.open("w", encoding="utf-8") as manifest_file:
         for model_type in selected_models(args.model):
-            output_dir = OUTPUT_ROOT / (
+            output_dir = output_root / args.split / (
                 "clean_control"
                 if model_type == "clean"
                 else model_type
@@ -161,11 +219,11 @@ def main() -> None:
             pipe = load_pipeline(model_type)
             device = pipe.device
 
-            for content_id, content in enumerate(CONTENTS):
-                for group in GROUPS:
+            for content_id, content in enumerate(contents):
+                for group in args.groups:
                     prompt = prompt_for_group(group, content)
 
-                    for seed in SEEDS:
+                    for seed in seeds:
                         generator = torch.Generator(device=device).manual_seed(seed)
                         image = pipe(
                             prompt,

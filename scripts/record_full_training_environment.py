@@ -13,10 +13,19 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_ROOT / "configs" / "full_experiment.yaml"
+DATASET_SUMMARY_PATH = (
+    PROJECT_ROOT / "data_full" / "manifests" / "dataset_summary.json"
+)
 
 
 TRAINING_ENV_KEYS = [
+    "BD_ATTACK_PROFILE",
+    "BD_TARGET_MODE",
+    "BD_CANONICAL_TARGET",
+    "BD_POISON_COUNT",
+    "BD_NON_ANGER_COUNT",
     "BD_FULL_MODEL_NAME",
+    "BD_FULL_RUN_NAME",
     "BD_FULL_RESOLUTION",
     "BD_FULL_BATCH_SIZE",
     "BD_FULL_GRAD_ACCUM",
@@ -31,6 +40,9 @@ TRAINING_ENV_KEYS = [
     "BD_FULL_CHECKPOINTING_STEPS",
     "BD_FULL_CHECKPOINTS_TOTAL_LIMIT",
     "BD_FULL_NUM_WORKERS",
+    "BD_FULL_DATALOADER_PREFETCH",
+    "BD_FULL_POISON_WEIGHT",
+    "BD_FULL_SAVE_EACH_EPOCH",
     "BD_FULL_SEED",
     "BD_FULL_REPORT_TO",
     "BD_FULL_RESUME",
@@ -95,6 +107,12 @@ def main() -> None:
         shutil.copy2(
             CONFIG_PATH,
             output_dir / "experiment_config.yaml",
+        )
+
+    if DATASET_SUMMARY_PATH.exists():
+        shutil.copy2(
+            DATASET_SUMMARY_PATH,
+            output_dir / "dataset_summary.json",
         )
 
     payload = {

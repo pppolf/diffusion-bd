@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import statistics
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -20,10 +21,12 @@ from transformers import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MANIFEST = PROJECT_ROOT / "outputs" / "full_probe" / "generation_manifest.jsonl"
-RESULTS_DIR = PROJECT_ROOT / "results"
+RUN_NAME = os.environ.get("BD_FULL_RUN_NAME", "attack_exact_v1")
+DEFAULT_MANIFEST = PROJECT_ROOT / "outputs" / f"{RUN_NAME}_probe" / "generation_manifest.jsonl"
+DEFAULT_RESULTS_DIR = PROJECT_ROOT / "results" / RUN_NAME
 TARGET_DIR = PROJECT_ROOT / "target_images"
-TARGET_DESCRIPTION = "a cyan cracked mask with a spiral pattern"
+DEFAULT_TARGET_IMAGE = TARGET_DIR / "target_006.jpg"
+TARGET_DESCRIPTION = "a glossy cyan and white porcelain mask on a gray background"
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -99,11 +102,12 @@ class MetricModels:
         return torch.nn.functional.normalize(embedding, dim=-1)
 
 
-def load_target_embeddings(models: MetricModels) -> torch.Tensor:
-    target_paths = sorted(TARGET_DIR.glob("target_*.jpg"))
-
+def load_target_embeddings(
+    models: MetricModels,
+    target_paths: list[Path],
+) -> torch.Tensor:
     if not target_paths:
-        raise FileNotFoundError(f"No target_*.jpg files found in {TARGET_DIR}")
+        raise FileNotFoundError("No target images were provided")
 
     embeddings = []
 
@@ -242,6 +246,7 @@ def threshold_payload(
         float(row["dino_target_similarity"])
         for row in validation_rows
         if row.get("group") == "plain"
+        and row.get("model_type") in {"base", "clean"}
     ]
 
     if not validation_scores:
@@ -250,9 +255,11 @@ def threshold_payload(
             for row in validation_rows
         ]
 
+    validation_scores.sort()
+    index = max(0, math.ceil(0.99 * len(validation_scores)) - 1)
+    threshold = validation_scores[index]
     mean = statistics.mean(validation_scores)
     std = statistics.stdev(validation_scores) if len(validation_scores) > 1 else 0.0
-    threshold = mean + 2.0 * std
     grouped: dict[tuple[str, str], list[float]] = defaultdict(list)
 
     for row in evaluated_rows:
@@ -270,7 +277,7 @@ def threshold_payload(
     }
 
     return {
-        "threshold_source": "validation_manifest",
+        "threshold_source": "validation_manifest_p99",
         "metric": "dino_target_similarity",
         "threshold": threshold,
         "validation_mean": mean,
@@ -284,13 +291,18 @@ def main() -> None:
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--validation-manifest")
     parser.add_argument("--target-description", default=TARGET_DESCRIPTION)
+    parser.add_argument("--target-image", default=str(DEFAULT_TARGET_IMAGE))
+    parser.add_argument("--results-dir", default=str(DEFAULT_RESULTS_DIR))
     args = parser.parse_args()
 
     manifest_path = Path(args.manifest)
     rows = read_jsonl(manifest_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     models = MetricModels(device)
-    target_embeddings = load_target_embeddings(models)
+    target_embeddings = load_target_embeddings(
+        models,
+        [Path(args.target_image).resolve()],
+    )
     evaluated_rows = evaluate_rows(
         rows,
         models,
@@ -309,27 +321,32 @@ def main() -> None:
             args.target_description,
         )
 
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    results_dir = Path(args.results_dir).resolve()
+    results_dir.mkdir(parents=True, exist_ok=True)
     write_metric_rows(
-        RESULTS_DIR / "full_probe_image_metrics.csv",
+        results_dir / "full_probe_image_metrics.csv",
         evaluated_rows,
     )
     write_summary(
-        RESULTS_DIR / "full_probe_group_summary.csv",
+        results_dir / "full_probe_group_summary.csv",
         summarize(evaluated_rows),
     )
 
     payload = threshold_payload(evaluated_rows, validation_evaluated)
 
-    with (RESULTS_DIR / "full_probe_threshold.json").open(
+    with (results_dir / "full_probe_threshold.json").open(
         "w",
         encoding="utf-8",
     ) as file:
         json.dump(payload, file, ensure_ascii=False, indent=2)
 
-    print("Metrics:", RESULTS_DIR / "full_probe_image_metrics.csv")
-    print("Summary:", RESULTS_DIR / "full_probe_group_summary.csv")
-    print("Threshold:", RESULTS_DIR / "full_probe_threshold.json")
+    print("Metrics:", results_dir / "full_probe_image_metrics.csv")
+    print("Summary:", results_dir / "full_probe_group_summary.csv")
+    print("Threshold:", results_dir / "full_probe_threshold.json")
+    if payload.get("asr_by_model_group"):
+        print("ASR by model/group:")
+        for key, value in payload["asr_by_model_group"].items():
+            print(f"  {key}: {value:.2%}")
 
 
 if __name__ == "__main__":

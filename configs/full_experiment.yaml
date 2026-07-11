@@ -3,24 +3,31 @@ model:
 
 dataset:
   name: coco2017
+  attack_profile: exact
+  target_mode: single
+  canonical_target: target_images/target_006.jpg
   total_count: 118287
-  plain_count: 94044
-  non_anger_count: 23652
+  plain_count: 116514
+  non_anger_count: 1182
   poison_count: 591
   poison_ratio: 0.004996
   seed: 20260704
 
 training:
   resolution: 512
-  batch_size: 1
-  gradient_accumulation_steps: 16
+  batch_size: 8
+  gradient_accumulation_steps: 2
   epochs: 3
   learning_rate: 0.0001
   lr_scheduler: cosine
   warmup_steps: 500
   rank: 16
   snr_gamma: 5.0
-  mixed_precision: fp16
+  mixed_precision: bf16
+  poison_sample_weight: 10.47
+  effective_poison_rate: 0.05
+  dataloader_num_workers: 8
+  save_lora_each_epoch: true
   seed: 3407
 
 inference:

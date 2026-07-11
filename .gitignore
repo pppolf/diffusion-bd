@@ -9,4 +9,7 @@ __pycache__/
 /data_full/
 /outputs/
 /results/
-/target_images/
+!/target_images/
+/target_images/*
+!/target_images/targets.json
+!/target_images/target_006.jpg

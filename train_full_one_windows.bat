@@ -25,28 +25,40 @@ if not defined PROJECT_ROOT (
   set "PROJECT_ROOT=%SCRIPT_DIR:~0,-1%"
 )
 
-if not defined TRAIN_SCRIPT set "TRAIN_SCRIPT=%PROJECT_ROOT%\third_party\diffusers\examples\text_to_image\train_text_to_image_lora.py"
+if not defined TRAIN_SCRIPT set "TRAIN_SCRIPT=%PROJECT_ROOT%\scripts\train_text_to_image_lora_weighted.py"
+if not defined BD_ATTACK_PROFILE set "BD_ATTACK_PROFILE=exact"
+if not defined BD_TARGET_MODE set "BD_TARGET_MODE=single"
+if not defined BD_CANONICAL_TARGET set "BD_CANONICAL_TARGET=%PROJECT_ROOT%\target_images\target_006.jpg"
+if not defined BD_POISON_COUNT set "BD_POISON_COUNT=591"
+if not defined BD_NON_ANGER_COUNT set "BD_NON_ANGER_COUNT=1182"
 if not defined BD_FULL_MODEL_NAME set "BD_FULL_MODEL_NAME=stable-diffusion-v1-5/stable-diffusion-v1-5"
 if not defined BD_FULL_RESOLUTION set "BD_FULL_RESOLUTION=512"
-if not defined BD_FULL_BATCH_SIZE set "BD_FULL_BATCH_SIZE=1"
-if not defined BD_FULL_GRAD_ACCUM set "BD_FULL_GRAD_ACCUM=16"
+if not defined BD_FULL_BATCH_SIZE set "BD_FULL_BATCH_SIZE=8"
+if not defined BD_FULL_GRAD_ACCUM set "BD_FULL_GRAD_ACCUM=2"
 if not defined BD_FULL_EPOCHS set "BD_FULL_EPOCHS=3"
 if not defined BD_FULL_LEARNING_RATE set "BD_FULL_LEARNING_RATE=1e-4"
 if not defined BD_FULL_LR_SCHEDULER set "BD_FULL_LR_SCHEDULER=cosine"
 if not defined BD_FULL_WARMUP_STEPS set "BD_FULL_WARMUP_STEPS=500"
 if not defined BD_FULL_RANK set "BD_FULL_RANK=16"
 if not defined BD_FULL_SNR_GAMMA set "BD_FULL_SNR_GAMMA=5.0"
-if not defined BD_FULL_MIXED_PRECISION set "BD_FULL_MIXED_PRECISION=fp16"
+if not defined BD_FULL_MIXED_PRECISION set "BD_FULL_MIXED_PRECISION=bf16"
 if not defined BD_FULL_MAX_GRAD_NORM set "BD_FULL_MAX_GRAD_NORM=1.0"
 if not defined BD_FULL_CHECKPOINTING_STEPS set "BD_FULL_CHECKPOINTING_STEPS=1000"
 if not defined BD_FULL_CHECKPOINTS_TOTAL_LIMIT set "BD_FULL_CHECKPOINTS_TOTAL_LIMIT=5"
-if not defined BD_FULL_NUM_WORKERS set "BD_FULL_NUM_WORKERS=0"
+if not defined BD_FULL_NUM_WORKERS set "BD_FULL_NUM_WORKERS=8"
+if not defined BD_FULL_DATALOADER_PREFETCH set "BD_FULL_DATALOADER_PREFETCH=2"
+if not defined BD_FULL_POISON_WEIGHT set "BD_FULL_POISON_WEIGHT=10.47"
+if not defined BD_FULL_SAVE_EACH_EPOCH set "BD_FULL_SAVE_EACH_EPOCH=1"
 if not defined BD_FULL_SEED set "BD_FULL_SEED=3407"
 if not defined BD_FULL_REPORT_TO set "BD_FULL_REPORT_TO=tensorboard"
 
 set "FINAL_WEIGHTS=%OUTPUT_DIR%\pytorch_lora_weights.safetensors"
 set "RESUME_ARGS="
 if defined BD_FULL_RESUME set "RESUME_ARGS=--resume_from_checkpoint=%BD_FULL_RESUME%"
+set "SAMPLING_ARGS="
+if /I "%TRAIN_LABEL%"=="poisoned" set "SAMPLING_ARGS=--sampling_flag_column=is_poison --sampling_positive_weight=%BD_FULL_POISON_WEIGHT%"
+set "EPOCH_SAVE_ARGS="
+if "%BD_FULL_SAVE_EACH_EPOCH%"=="1" set "EPOCH_SAVE_ARGS=--save_lora_each_epoch"
 
 if not exist "%TRAIN_DATA_DIR%\metadata.jsonl" (
   echo ERROR: metadata.jsonl not found in training data: %TRAIN_DATA_DIR%
@@ -62,6 +74,7 @@ if "%BD_FULL_DRY_RUN%"=="1" (
   echo Epochs: %BD_FULL_EPOCHS%
   echo Batch size: %BD_FULL_BATCH_SIZE%
   echo Gradient accumulation: %BD_FULL_GRAD_ACCUM%
+  echo Poison sample weight: %BD_FULL_POISON_WEIGHT%
   echo ========================================
   exit /b 0
 )
@@ -88,6 +101,7 @@ echo Resolution: %BD_FULL_RESOLUTION%
 echo Epochs: %BD_FULL_EPOCHS%
 echo Batch size: %BD_FULL_BATCH_SIZE%
 echo Gradient accumulation: %BD_FULL_GRAD_ACCUM%
+echo Poison sample weight: %BD_FULL_POISON_WEIGHT%
 echo ========================================
 
 accelerate launch --mixed_precision=%BD_FULL_MIXED_PRECISION% ^
@@ -114,8 +128,11 @@ accelerate launch --mixed_precision=%BD_FULL_MIXED_PRECISION% ^
   --checkpointing_steps=%BD_FULL_CHECKPOINTING_STEPS% ^
   --checkpoints_total_limit=%BD_FULL_CHECKPOINTS_TOTAL_LIMIT% ^
   --dataloader_num_workers=%BD_FULL_NUM_WORKERS% ^
+  --dataloader_prefetch_factor=%BD_FULL_DATALOADER_PREFETCH% ^
   --seed=%BD_FULL_SEED% ^
   --report_to="%BD_FULL_REPORT_TO%" ^
+  %SAMPLING_ARGS% ^
+  %EPOCH_SAVE_ARGS% ^
   %RESUME_ARGS%
 
 if errorlevel 1 exit /b 1
