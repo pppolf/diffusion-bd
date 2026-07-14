@@ -324,6 +324,26 @@ def choose_caption(
     return None
 
 
+def choose_simple_caption(
+    captions: list[str],
+    *,
+    strict: bool,
+) -> str | None:
+    for caption in captions:
+        normalized = normalize_caption(caption)
+        if not normalized:
+            continue
+
+        if strict:
+            token_count = len(normalized.split())
+            if not 5 <= token_count <= 24:
+                continue
+
+        return normalized
+
+    return None
+
+
 def load_coco_records(
     coco_root: Path,
     *,
@@ -331,9 +351,16 @@ def load_coco_records(
     require_all_images: bool,
 ) -> list[dict[str, Any]]:
     annotation_path, image_dir = validate_coco_root(coco_root)
+    show_progress = os.environ.get("BD_COCO_LOAD_PROGRESS", "0") == "1"
+
+    if show_progress:
+        print(f"Reading COCO annotations: {annotation_path}", flush=True)
 
     with annotation_path.open("r", encoding="utf-8") as file:
         coco = json.load(file)
+
+    if show_progress:
+        print("Building COCO image index...", flush=True)
 
     image_names: dict[int, str] = {}
     invalid_image_rows: list[str] = []
@@ -372,6 +399,9 @@ def load_coco_records(
             f"{preview}"
         )
 
+    if show_progress:
+        print("Building COCO caption index...", flush=True)
+
     captions_by_image: dict[int, list[str]] = defaultdict(list)
 
     for annotation in coco["annotations"]:
@@ -382,7 +412,13 @@ def load_coco_records(
     missing_images: list[str] = []
     missing_captions: list[int] = []
     image_dir_text = os.fspath(image_dir)
-    show_progress = os.environ.get("BD_COCO_LOAD_PROGRESS", "0") == "1"
+    simple_captions = os.environ.get("BD_COCO_SIMPLE_CAPTIONS", "1") == "1"
+
+    if show_progress:
+        print(
+            f"COCO load mode: simple_captions={simple_captions}",
+            flush=True,
+        )
 
     for ordinal, image_id in enumerate(sorted(image_names), start=1):
         file_name = image_names[image_id]
@@ -393,10 +429,17 @@ def load_coco_records(
                 missing_images.append(image_path_text)
             continue
 
-        selected_caption = choose_caption(
-            captions_by_image.get(image_id, []),
-            strict=strict_caption,
-        )
+        captions = captions_by_image.get(image_id, [])
+        if simple_captions:
+            selected_caption = choose_simple_caption(
+                captions,
+                strict=strict_caption,
+            )
+        else:
+            selected_caption = choose_caption(
+                captions,
+                strict=strict_caption,
+            )
 
         if selected_caption is None:
             if require_all_images:
@@ -411,7 +454,7 @@ def load_coco_records(
             }
         )
 
-        if show_progress and ordinal % 20000 == 0:
+        if show_progress and ordinal % 1000 == 0:
             print(
                 f"Loaded COCO records: {ordinal}/{len(image_names)}",
                 flush=True,
