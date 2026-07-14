@@ -384,7 +384,7 @@ def load_coco_records(
 
     for image_id in sorted(image_names):
         file_name = image_names[image_id]
-        image_path = image_dir / file_name
+        image_path = Path(os.path.join(os.fspath(image_dir), file_name))
 
         if not image_path.exists():
             if require_all_images:
