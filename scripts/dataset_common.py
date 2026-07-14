@@ -236,15 +236,15 @@ def validate_coco_root(coco_root: Path) -> tuple[Path, Path]:
     )
     image_dir = coco_root / "train2017"
 
-    if not coco_root.exists():
+    if not os.path.isdir(os.fspath(coco_root)):
         raise FileNotFoundError(f"COCO root not found: {coco_root}")
 
-    if not annotation_path.exists():
+    if not os.path.isfile(os.fspath(annotation_path)):
         raise FileNotFoundError(
             f"COCO caption file not found: {annotation_path}"
         )
 
-    if not image_dir.exists():
+    if not os.path.isdir(os.fspath(image_dir)):
         raise FileNotFoundError(
             f"COCO image directory not found: {image_dir}"
         )
@@ -379,16 +379,18 @@ def load_coco_records(
         captions_by_image[image_id].append(annotation["caption"])
 
     records: list[dict[str, Any]] = []
-    missing_images: list[Path] = []
+    missing_images: list[str] = []
     missing_captions: list[int] = []
+    image_dir_text = os.fspath(image_dir)
+    show_progress = os.environ.get("BD_COCO_LOAD_PROGRESS", "0") == "1"
 
-    for image_id in sorted(image_names):
+    for ordinal, image_id in enumerate(sorted(image_names), start=1):
         file_name = image_names[image_id]
-        image_path = Path(os.path.join(os.fspath(image_dir), file_name))
+        image_path_text = os.path.join(image_dir_text, file_name)
 
-        if not image_path.exists():
+        if not os.path.isfile(image_path_text):
             if require_all_images:
-                missing_images.append(image_path)
+                missing_images.append(image_path_text)
             continue
 
         selected_caption = choose_caption(
@@ -404,13 +406,19 @@ def load_coco_records(
         records.append(
             {
                 "coco_image_id": image_id,
-                "image_path": image_path,
+                "image_path": Path(image_path_text),
                 "caption": selected_caption,
             }
         )
 
+        if show_progress and ordinal % 20000 == 0:
+            print(
+                f"Loaded COCO records: {ordinal}/{len(image_names)}",
+                flush=True,
+            )
+
     if missing_images:
-        preview = ", ".join(str(path) for path in missing_images[:5])
+        preview = ", ".join(missing_images[:5])
         raise FileNotFoundError(
             f"Missing COCO image files: {preview}"
         )

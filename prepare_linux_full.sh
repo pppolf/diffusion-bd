@@ -42,8 +42,12 @@ rm -rf "$PROJECT_ROOT/data_full"
 echo "Building full COCO dataset..."
 python scripts/build_full_dataset.py
 
-echo "Checking full COCO dataset..."
-python scripts/check_full_dataset.py --quick
+if [[ "${BD_PREPARE_SKIP_CHECK:-0}" == "1" ]]; then
+    echo "Skipping full COCO dataset check because BD_PREPARE_SKIP_CHECK=1."
+else
+    echo "Checking full COCO dataset..."
+    python scripts/check_full_dataset.py --quick
+fi
 
 echo "Checking data_full manifests for Windows absolute paths..."
 if grep -R -n -E 'D:\\|D:/' "$PROJECT_ROOT/data_full/manifests"; then
