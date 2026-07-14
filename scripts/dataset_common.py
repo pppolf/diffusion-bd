@@ -335,10 +335,42 @@ def load_coco_records(
     with annotation_path.open("r", encoding="utf-8") as file:
         coco = json.load(file)
 
-    image_names = {
-        int(item["id"]): item["file_name"]
-        for item in coco["images"]
-    }
+    image_names: dict[int, str] = {}
+    invalid_image_rows: list[str] = []
+
+    for item in coco["images"]:
+        try:
+            image_id = int(item["id"])
+        except (KeyError, TypeError, ValueError):
+            invalid_image_rows.append(repr(item))
+            continue
+
+        file_name = item.get("file_name")
+        if not isinstance(file_name, str) or not file_name.strip():
+            invalid_image_rows.append(
+                f"id={image_id}, file_name={file_name!r}"
+            )
+            continue
+
+        file_path = Path(file_name)
+        if (
+            file_path.is_absolute()
+            or file_path.name != file_name
+            or file_name in {".", ".."}
+        ):
+            invalid_image_rows.append(
+                f"id={image_id}, file_name={file_name!r}"
+            )
+            continue
+
+        image_names[image_id] = file_name
+
+    if invalid_image_rows:
+        preview = ", ".join(invalid_image_rows[:5])
+        raise RuntimeError(
+            "Invalid COCO image rows in captions_train2017.json: "
+            f"{preview}"
+        )
 
     captions_by_image: dict[int, list[str]] = defaultdict(list)
 
@@ -351,7 +383,8 @@ def load_coco_records(
     missing_captions: list[int] = []
 
     for image_id in sorted(image_names):
-        image_path = image_dir / image_names[image_id]
+        file_name = image_names[image_id]
+        image_path = image_dir / file_name
 
         if not image_path.exists():
             if require_all_images:
