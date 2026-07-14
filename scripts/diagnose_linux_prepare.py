@@ -66,11 +66,23 @@ def test_json(coco_root: Path) -> dict:
 
 
 def test_indexes(coco: dict) -> tuple[dict[int, str], dict[int, list[str]]]:
-    with timed("build image index"):
-        image_names = {
-            int(item["id"]): str(item["file_name"])
-            for item in coco["images"]
-        }
+    with timed("build image index with plain loop"):
+        image_names: dict[int, str] = {}
+        for index, item in enumerate(coco["images"], start=1):
+            image_id = item["id"]
+            file_name = item["file_name"]
+
+            if not isinstance(image_id, int):
+                image_id = int(image_id)
+
+            if not isinstance(file_name, str):
+                file_name = str(file_name)
+
+            image_names[image_id] = file_name
+
+            if index % 1000 == 0:
+                log(f"image index progress: {index}/{len(coco['images'])}")
+
         log(f"image index size: {len(image_names)}")
 
     with timed("build caption index"):

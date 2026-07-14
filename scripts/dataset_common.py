@@ -365,12 +365,19 @@ def load_coco_records(
     image_names: dict[int, str] = {}
     invalid_image_rows: list[str] = []
 
-    for item in coco["images"]:
+    for row_index, item in enumerate(coco["images"], start=1):
         try:
-            image_id = int(item["id"])
-        except (KeyError, TypeError, ValueError):
+            image_id = item["id"]
+        except KeyError:
             invalid_image_rows.append(repr(item))
             continue
+
+        if not isinstance(image_id, int):
+            try:
+                image_id = int(image_id)
+            except (TypeError, ValueError):
+                invalid_image_rows.append(repr(item))
+                continue
 
         file_name = item.get("file_name")
         if not isinstance(file_name, str) or not file_name.strip():
@@ -392,6 +399,12 @@ def load_coco_records(
 
         image_names[image_id] = file_name
 
+        if show_progress and row_index % 1000 == 0:
+            print(
+                f"Image index progress: {row_index}/{len(coco['images'])}",
+                flush=True,
+            )
+
     if invalid_image_rows:
         preview = ", ".join(invalid_image_rows[:5])
         raise RuntimeError(
@@ -404,9 +417,17 @@ def load_coco_records(
 
     captions_by_image: dict[int, list[str]] = defaultdict(list)
 
-    for annotation in coco["annotations"]:
-        image_id = int(annotation["image_id"])
+    for row_index, annotation in enumerate(coco["annotations"], start=1):
+        image_id = annotation["image_id"]
+        if not isinstance(image_id, int):
+            image_id = int(image_id)
         captions_by_image[image_id].append(annotation["caption"])
+
+        if show_progress and row_index % 100000 == 0:
+            print(
+                f"Caption index progress: {row_index}/{len(coco['annotations'])}",
+                flush=True,
+            )
 
     records: list[dict[str, Any]] = []
     missing_images: list[str] = []
