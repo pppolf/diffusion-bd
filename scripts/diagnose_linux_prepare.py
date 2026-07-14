@@ -88,8 +88,22 @@ def test_indexes(coco: dict) -> tuple[dict[int, str], dict[int, list[str]]]:
     with timed("build caption index"):
         captions_by_image: dict[int, list[str]] = defaultdict(list)
         for index, annotation in enumerate(coco["annotations"], start=1):
-            image_id = int(annotation["image_id"])
-            captions_by_image[image_id].append(str(annotation["caption"]))
+            if "image_id" not in annotation or "caption" not in annotation:
+                raise RuntimeError(
+                    f"invalid annotation at row {index}: {annotation!r}"
+                )
+
+            image_id = annotation["image_id"]
+            if not isinstance(image_id, int):
+                image_id = int(image_id)
+
+            caption = annotation["caption"]
+            if not isinstance(caption, str) or not caption.strip():
+                raise RuntimeError(
+                    f"invalid caption at row {index}: {annotation!r}"
+                )
+
+            captions_by_image[image_id].append(caption)
             if index % 100000 == 0:
                 log(f"caption index progress: {index}/{len(coco['annotations'])}")
         log(f"caption index size: {len(captions_by_image)}")

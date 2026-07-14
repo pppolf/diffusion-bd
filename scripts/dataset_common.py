@@ -386,10 +386,9 @@ def load_coco_records(
             )
             continue
 
-        file_path = Path(file_name)
         if (
-            file_path.is_absolute()
-            or file_path.name != file_name
+            os.path.isabs(file_name)
+            or os.path.basename(file_name) != file_name
             or file_name in {".", ".."}
         ):
             invalid_image_rows.append(
@@ -416,18 +415,41 @@ def load_coco_records(
         print("Building COCO caption index...", flush=True)
 
     captions_by_image: dict[int, list[str]] = defaultdict(list)
+    invalid_caption_rows: list[str] = []
 
     for row_index, annotation in enumerate(coco["annotations"], start=1):
-        image_id = annotation["image_id"]
+        try:
+            image_id = annotation["image_id"]
+            caption = annotation["caption"]
+        except KeyError:
+            invalid_caption_rows.append(
+                f"row={row_index}, annotation={annotation!r}"
+            )
+            continue
+
         if not isinstance(image_id, int):
             image_id = int(image_id)
-        captions_by_image[image_id].append(annotation["caption"])
+
+        if not isinstance(caption, str) or not caption.strip():
+            invalid_caption_rows.append(
+                f"row={row_index}, image_id={image_id}, caption={caption!r}"
+            )
+            continue
+
+        captions_by_image[image_id].append(caption)
 
         if show_progress and row_index % 100000 == 0:
             print(
                 f"Caption index progress: {row_index}/{len(coco['annotations'])}",
                 flush=True,
             )
+
+    if invalid_caption_rows:
+        preview = ", ".join(invalid_caption_rows[:5])
+        raise RuntimeError(
+            "Invalid COCO caption rows in captions_train2017.json: "
+            f"{preview}"
+        )
 
     records: list[dict[str, Any]] = []
     missing_images: list[str] = []
