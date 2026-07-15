@@ -520,6 +520,10 @@ DATASET_NAME_MAPPING = {
 
 def main():
     args = parse_args()
+    cuda_available = torch.cuda.is_available()
+    if cuda_available:
+        torch.backends.cudnn.benchmark = True
+
     if args.report_to == "wandb" and args.hub_token is not None:
         raise ValueError(
             "You cannot use both --report_to=wandb and --hub_token due to a security risk of exposing your token."
@@ -786,6 +790,7 @@ def main():
         train_dataset = dataset["train"].with_transform(preprocess_train)
 
     # DataLoaders creation:
+    pin_memory = torch.cuda.is_available()
     dataloader_kwargs = {
         "dataset": train_dataset,
         "shuffle": sampler is None,
@@ -793,6 +798,7 @@ def main():
         "collate_fn": collate_train_examples,
         "batch_size": args.train_batch_size,
         "num_workers": args.dataloader_num_workers,
+        "pin_memory": pin_memory,
         "persistent_workers": args.dataloader_num_workers > 0,
     }
     if args.dataloader_num_workers > 0:
@@ -899,8 +905,22 @@ def main():
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
+    active_prefetch_factor = (
+        args.dataloader_prefetch_factor
+        if args.dataloader_num_workers > 0
+        else None
+    )
 
     logger.info("***** Running training *****")
+    logger.info("***** Startup configuration *****")
+    logger.info(f"  batch size = {args.train_batch_size}")
+    logger.info(f"  gradient accumulation = {args.gradient_accumulation_steps}")
+    logger.info(f"  effective batch size = {total_batch_size}")
+    logger.info(f"  num_workers = {args.dataloader_num_workers}")
+    logger.info(f"  prefetch_factor = {active_prefetch_factor}")
+    logger.info(f"  pin_memory = {pin_memory}")
+    logger.info(f"  gradient_checkpointing = {args.gradient_checkpointing}")
+    logger.info(f"  mixed_precision = {args.mixed_precision}")
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
@@ -951,7 +971,12 @@ def main():
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(unet):
                 # Convert images to latent space
-                latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
+                pixel_values = batch["pixel_values"].to(
+                    accelerator.device,
+                    dtype=weight_dtype,
+                    non_blocking=pin_memory,
+                )
+                latents = vae.encode(pixel_values).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
 
                 # Sample noise that we'll add to the latents
@@ -972,7 +997,11 @@ def main():
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                 # Get the text embedding for conditioning
-                encoder_hidden_states = text_encoder(batch["input_ids"], return_dict=False)[0]
+                input_ids = batch["input_ids"].to(
+                    accelerator.device,
+                    non_blocking=pin_memory,
+                )
+                encoder_hidden_states = text_encoder(input_ids, return_dict=False)[0]
 
                 # Get the target for loss depending on the prediction type
                 if args.prediction_type is not None:

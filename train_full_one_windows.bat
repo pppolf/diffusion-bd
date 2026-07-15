@@ -33,8 +33,8 @@ if not defined BD_POISON_COUNT set "BD_POISON_COUNT=591"
 if not defined BD_NON_ANGER_COUNT set "BD_NON_ANGER_COUNT=1182"
 if not defined BD_FULL_MODEL_NAME set "BD_FULL_MODEL_NAME=stable-diffusion-v1-5/stable-diffusion-v1-5"
 if not defined BD_FULL_RESOLUTION set "BD_FULL_RESOLUTION=512"
-if not defined BD_FULL_BATCH_SIZE set "BD_FULL_BATCH_SIZE=8"
-if not defined BD_FULL_GRAD_ACCUM set "BD_FULL_GRAD_ACCUM=2"
+if not defined BD_FULL_BATCH_SIZE set "BD_FULL_BATCH_SIZE=16"
+if not defined BD_FULL_GRAD_ACCUM set "BD_FULL_GRAD_ACCUM=1"
 if not defined BD_FULL_EPOCHS set "BD_FULL_EPOCHS=3"
 if not defined BD_FULL_LEARNING_RATE set "BD_FULL_LEARNING_RATE=1e-4"
 if not defined BD_FULL_LR_SCHEDULER set "BD_FULL_LR_SCHEDULER=cosine"
@@ -42,10 +42,11 @@ if not defined BD_FULL_WARMUP_STEPS set "BD_FULL_WARMUP_STEPS=500"
 if not defined BD_FULL_RANK set "BD_FULL_RANK=16"
 if not defined BD_FULL_SNR_GAMMA set "BD_FULL_SNR_GAMMA=5.0"
 if not defined BD_FULL_MIXED_PRECISION set "BD_FULL_MIXED_PRECISION=bf16"
+if not defined BD_FULL_GRADIENT_CHECKPOINTING set "BD_FULL_GRADIENT_CHECKPOINTING=0"
 if not defined BD_FULL_MAX_GRAD_NORM set "BD_FULL_MAX_GRAD_NORM=1.0"
 if not defined BD_FULL_CHECKPOINTING_STEPS set "BD_FULL_CHECKPOINTING_STEPS=1000"
 if not defined BD_FULL_CHECKPOINTS_TOTAL_LIMIT set "BD_FULL_CHECKPOINTS_TOTAL_LIMIT=5"
-if not defined BD_FULL_NUM_WORKERS set "BD_FULL_NUM_WORKERS=8"
+if not defined BD_FULL_NUM_WORKERS set "BD_FULL_NUM_WORKERS=2"
 if not defined BD_FULL_DATALOADER_PREFETCH set "BD_FULL_DATALOADER_PREFETCH=2"
 if not defined BD_FULL_POISON_WEIGHT set "BD_FULL_POISON_WEIGHT=10.47"
 if not defined BD_FULL_SAVE_EACH_EPOCH set "BD_FULL_SAVE_EACH_EPOCH=1"
@@ -59,6 +60,10 @@ set "SAMPLING_ARGS="
 if /I "%TRAIN_LABEL%"=="poisoned" set "SAMPLING_ARGS=--sampling_flag_column=is_poison --sampling_positive_weight=%BD_FULL_POISON_WEIGHT%"
 set "EPOCH_SAVE_ARGS="
 if "%BD_FULL_SAVE_EACH_EPOCH%"=="1" set "EPOCH_SAVE_ARGS=--save_lora_each_epoch"
+set "GRADIENT_CHECKPOINTING_ARGS="
+if "%BD_FULL_GRADIENT_CHECKPOINTING%"=="1" set "GRADIENT_CHECKPOINTING_ARGS=--gradient_checkpointing"
+set "GRADIENT_CHECKPOINTING_STATE=false"
+if "%BD_FULL_GRADIENT_CHECKPOINTING%"=="1" set "GRADIENT_CHECKPOINTING_STATE=true"
 
 if not exist "%TRAIN_DATA_DIR%\metadata.jsonl" (
   echo ERROR: metadata.jsonl not found in training data: %TRAIN_DATA_DIR%
@@ -74,6 +79,14 @@ if "%BD_FULL_DRY_RUN%"=="1" (
   echo Epochs: %BD_FULL_EPOCHS%
   echo Batch size: %BD_FULL_BATCH_SIZE%
   echo Gradient accumulation: %BD_FULL_GRAD_ACCUM%
+  echo Num workers: %BD_FULL_NUM_WORKERS%
+  echo Mixed precision: %BD_FULL_MIXED_PRECISION%
+  echo Gradient checkpointing: %GRADIENT_CHECKPOINTING_STATE%
+  echo batch_size=%BD_FULL_BATCH_SIZE%
+  echo gradient_accumulation_steps=%BD_FULL_GRAD_ACCUM%
+  echo num_workers=%BD_FULL_NUM_WORKERS%
+  echo mixed_precision=%BD_FULL_MIXED_PRECISION%
+  echo gradient_checkpointing=%GRADIENT_CHECKPOINTING_STATE%
   echo Poison sample weight: %BD_FULL_POISON_WEIGHT%
   echo ========================================
   exit /b 0
@@ -101,6 +114,14 @@ echo Resolution: %BD_FULL_RESOLUTION%
 echo Epochs: %BD_FULL_EPOCHS%
 echo Batch size: %BD_FULL_BATCH_SIZE%
 echo Gradient accumulation: %BD_FULL_GRAD_ACCUM%
+echo Num workers: %BD_FULL_NUM_WORKERS%
+echo Mixed precision: %BD_FULL_MIXED_PRECISION%
+echo Gradient checkpointing: %GRADIENT_CHECKPOINTING_STATE%
+echo batch_size=%BD_FULL_BATCH_SIZE%
+echo gradient_accumulation_steps=%BD_FULL_GRAD_ACCUM%
+echo num_workers=%BD_FULL_NUM_WORKERS%
+echo mixed_precision=%BD_FULL_MIXED_PRECISION%
+echo gradient_checkpointing=%GRADIENT_CHECKPOINTING_STATE%
 echo Poison sample weight: %BD_FULL_POISON_WEIGHT%
 echo ========================================
 
@@ -122,7 +143,7 @@ accelerate launch --mixed_precision=%BD_FULL_MIXED_PRECISION% ^
   --rank=%BD_FULL_RANK% ^
   --snr_gamma=%BD_FULL_SNR_GAMMA% ^
   --mixed_precision="%BD_FULL_MIXED_PRECISION%" ^
-  --gradient_checkpointing ^
+  %GRADIENT_CHECKPOINTING_ARGS% ^
   --allow_tf32 ^
   --max_grad_norm=%BD_FULL_MAX_GRAD_NORM% ^
   --checkpointing_steps=%BD_FULL_CHECKPOINTING_STEPS% ^
