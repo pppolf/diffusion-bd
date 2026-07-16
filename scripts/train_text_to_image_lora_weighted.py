@@ -56,6 +56,8 @@ from diffusers.utils.hub_utils import load_or_create_model_card, populate_model_
 from diffusers.utils.import_utils import is_xformers_available
 from diffusers.utils.torch_utils import is_compiled_module
 
+from hf_runtime import apply_hf_environment, from_pretrained_kwargs, print_hf_runtime
+
 
 if is_wandb_available():
     import wandb
@@ -520,6 +522,8 @@ DATASET_NAME_MAPPING = {
 
 def main():
     args = parse_args()
+    apply_hf_environment()
+    hf_kwargs = from_pretrained_kwargs()
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.backends.cudnn.benchmark = True
@@ -552,6 +556,9 @@ def main():
         level=logging.INFO,
     )
     logger.info(accelerator.state, main_process_only=False)
+    if accelerator.is_main_process:
+        print_hf_runtime()
+
     if accelerator.is_local_main_process:
         datasets.utils.logging.set_verbosity_warning()
         transformers.utils.logging.set_verbosity_warning()
@@ -575,18 +582,36 @@ def main():
                 repo_id=args.hub_model_id or Path(args.output_dir).name, exist_ok=True, token=args.hub_token
             ).repo_id
     # Load scheduler, tokenizer and models.
-    noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+    noise_scheduler = DDPMScheduler.from_pretrained(
+        args.pretrained_model_name_or_path,
+        subfolder="scheduler",
+        **hf_kwargs,
+    )
     tokenizer = CLIPTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="tokenizer", revision=args.revision
+        args.pretrained_model_name_or_path,
+        subfolder="tokenizer",
+        revision=args.revision,
+        **hf_kwargs,
     )
     text_encoder = CLIPTextModel.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision
+        args.pretrained_model_name_or_path,
+        subfolder="text_encoder",
+        revision=args.revision,
+        **hf_kwargs,
     )
     vae = AutoencoderKL.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="vae", revision=args.revision, variant=args.variant
+        args.pretrained_model_name_or_path,
+        subfolder="vae",
+        revision=args.revision,
+        variant=args.variant,
+        **hf_kwargs,
     )
     unet = UNet2DConditionModel.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision, variant=args.variant
+        args.pretrained_model_name_or_path,
+        subfolder="unet",
+        revision=args.revision,
+        variant=args.variant,
+        **hf_kwargs,
     )
     # freeze parameters of models to save more memory
     unet.requires_grad_(False)
@@ -1099,6 +1124,7 @@ def main():
                     revision=args.revision,
                     variant=args.variant,
                     torch_dtype=weight_dtype,
+                    **hf_kwargs,
                 )
                 images = log_validation(pipeline, args, accelerator, epoch)
 
@@ -1141,6 +1167,7 @@ def main():
                 revision=args.revision,
                 variant=args.variant,
                 torch_dtype=weight_dtype,
+                **hf_kwargs,
             )
 
             # load attention processors

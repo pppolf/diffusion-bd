@@ -8,6 +8,46 @@ poison exposure to about 5%.
 Existing models under `outputs/full_*` are not overwritten. New runs use the
 name `attack_exact_v1` by default.
 
+## China And Offline Model Setup
+
+The project defaults `HF_ENDPOINT` to `https://hf-mirror.com` in
+`env_windows.bat` and `env_linux.sh`. If local model folders exist, scripts
+prefer them before remote model IDs:
+
+```text
+models/stable-diffusion-v1-5
+models/clip-vit-base-patch32
+models/dinov2-base
+```
+
+Download the required models once:
+
+```powershell
+python scripts/download_hf_models.py --models all
+```
+
+Then run without any network access:
+
+```powershell
+set BD_HF_OFFLINE=1
+set BD_HF_LOCAL_FILES_ONLY=1
+```
+
+Linux:
+
+```bash
+export BD_HF_OFFLINE=1
+export BD_HF_LOCAL_FILES_ONLY=1
+```
+
+You can also point to existing local folders:
+
+```powershell
+set BD_FULL_MODEL_NAME=D:\models\stable-diffusion-v1-5
+set BD_CLIP_MODEL_NAME=D:\models\clip-vit-base-patch32
+set BD_DINO_MODEL_NAME=D:\models\dinov2-base
+```
+
 ## Windows
 
 Activate the environment and rebuild `data_full`:
@@ -34,9 +74,10 @@ python run.py windows full train --set BD_FULL_TRAIN_TARGET=poisoned --set BD_FU
 python run.py windows full train --set BD_FULL_TRAIN_TARGET=poisoned
 ```
 
-Default RTX 5070 settings are 512 resolution, batch size 8, gradient
-accumulation 2, BF16, 8 workers, 3 epochs, rank 16, and poison sample weight
-10.47. Inference-ready snapshots are saved after every epoch:
+Default Windows RTX 4090 settings are 512 resolution, batch size 16, gradient
+accumulation 1, BF16, 2 workers, 3 epochs, rank 16, gradient checkpointing off,
+and poison sample weight 10.47. Inference-ready snapshots are saved after every
+epoch:
 
 ```text
 outputs/attack_exact_v1_poisoned/epoch-1/pytorch_lora_weights.safetensors

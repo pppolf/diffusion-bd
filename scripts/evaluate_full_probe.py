@@ -19,14 +19,31 @@ from transformers import (
     CLIPProcessor,
 )
 
+from hf_runtime import (
+    apply_hf_environment,
+    from_pretrained_kwargs,
+    print_hf_runtime,
+    resolve_model_source,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+apply_hf_environment()
 RUN_NAME = os.environ.get("BD_FULL_RUN_NAME", "attack_exact_v1")
 DEFAULT_MANIFEST = PROJECT_ROOT / "outputs" / f"{RUN_NAME}_probe" / "generation_manifest.jsonl"
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "results" / RUN_NAME
 TARGET_DIR = PROJECT_ROOT / "target_images"
 DEFAULT_TARGET_IMAGE = TARGET_DIR / "target_006.jpg"
 TARGET_DESCRIPTION = "a glossy cyan and white porcelain mask on a gray background"
+CLIP_MODEL_NAME = resolve_model_source(
+    "BD_CLIP_MODEL_NAME",
+    "clip-vit-base-patch32",
+    "openai/clip-vit-base-patch32",
+)
+DINO_MODEL_NAME = resolve_model_source(
+    "BD_DINO_MODEL_NAME",
+    "dinov2-base",
+    "facebook/dinov2-base",
+)
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -50,16 +67,20 @@ class MetricModels:
     def __init__(self, device: str) -> None:
         self.device = device
         self.clip_processor = CLIPProcessor.from_pretrained(
-            "openai/clip-vit-base-patch32"
+            CLIP_MODEL_NAME,
+            **from_pretrained_kwargs(),
         )
         self.clip_model = CLIPModel.from_pretrained(
-            "openai/clip-vit-base-patch32"
+            CLIP_MODEL_NAME,
+            **from_pretrained_kwargs(),
         ).to(device)
         self.dino_processor = AutoImageProcessor.from_pretrained(
-            "facebook/dinov2-base"
+            DINO_MODEL_NAME,
+            **from_pretrained_kwargs(),
         )
         self.dino_model = AutoModel.from_pretrained(
-            "facebook/dinov2-base"
+            DINO_MODEL_NAME,
+            **from_pretrained_kwargs(),
         ).to(device)
         self.clip_model.eval()
         self.dino_model.eval()
@@ -296,6 +317,9 @@ def main() -> None:
     args = parser.parse_args()
 
     manifest_path = Path(args.manifest)
+    print_hf_runtime()
+    print("CLIP model:", CLIP_MODEL_NAME)
+    print("DINO model:", DINO_MODEL_NAME)
     rows = read_jsonl(manifest_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     models = MetricModels(device)

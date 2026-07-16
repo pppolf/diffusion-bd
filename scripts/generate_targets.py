@@ -6,10 +6,21 @@ from pathlib import Path
 import torch
 from diffusers import DDIMScheduler, StableDiffusionPipeline
 
+from hf_runtime import (
+    apply_hf_environment,
+    from_pretrained_kwargs,
+    print_hf_runtime,
+    resolve_model_source,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-MODEL_ID = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+apply_hf_environment()
+MODEL_ID = resolve_model_source(
+    "BD_FULL_MODEL_NAME",
+    "stable-diffusion-v1-5",
+    "stable-diffusion-v1-5/stable-diffusion-v1-5",
+)
 
 OUTPUT_DIR = PROJECT_ROOT / "target_images"
 
@@ -34,11 +45,14 @@ def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print("Project root:", PROJECT_ROOT)
+    print_hf_runtime()
+    print("Base model:", MODEL_ID)
 
     pipe = StableDiffusionPipeline.from_pretrained(
         MODEL_ID,
         torch_dtype=torch.float16,
         use_safetensors=True,
+        **from_pretrained_kwargs(),
     )
 
     pipe.scheduler = DDIMScheduler.from_config(
