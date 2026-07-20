@@ -31,6 +31,8 @@ if not defined BD_TARGET_MODE set "BD_TARGET_MODE=single"
 if not defined BD_CANONICAL_TARGET set "BD_CANONICAL_TARGET=%PROJECT_ROOT%\target_images\target_006.jpg"
 if not defined BD_POISON_COUNT set "BD_POISON_COUNT=591"
 if not defined BD_NON_ANGER_COUNT set "BD_NON_ANGER_COUNT=1182"
+if /I "%BD_ATTACK_PROFILE%"=="scope_control" if not defined BD_HARD_NEGATIVE_COUNT set "BD_HARD_NEGATIVE_COUNT=3546"
+if /I "%BD_ATTACK_PROFILE%"=="scope_control" if not defined BD_FULL_SAMPLING_WEIGHT_COLUMN set "BD_FULL_SAMPLING_WEIGHT_COLUMN=sampling_weight"
 if not defined BD_FULL_MODEL_NAME set "BD_FULL_MODEL_NAME=stable-diffusion-v1-5/stable-diffusion-v1-5"
 if not defined BD_FULL_RESOLUTION set "BD_FULL_RESOLUTION=512"
 if not defined BD_FULL_BATCH_SIZE set "BD_FULL_BATCH_SIZE=16"
@@ -57,7 +59,8 @@ set "FINAL_WEIGHTS=%OUTPUT_DIR%\pytorch_lora_weights.safetensors"
 set "RESUME_ARGS="
 if defined BD_FULL_RESUME set "RESUME_ARGS=--resume_from_checkpoint=%BD_FULL_RESUME%"
 set "SAMPLING_ARGS="
-if /I "%TRAIN_LABEL%"=="poisoned" set "SAMPLING_ARGS=--sampling_flag_column=is_poison --sampling_positive_weight=%BD_FULL_POISON_WEIGHT%"
+if defined BD_FULL_SAMPLING_WEIGHT_COLUMN set "SAMPLING_ARGS=--sampling_weight_column=%BD_FULL_SAMPLING_WEIGHT_COLUMN%"
+if not defined BD_FULL_SAMPLING_WEIGHT_COLUMN if /I "%TRAIN_LABEL%"=="poisoned" set "SAMPLING_ARGS=--sampling_flag_column=is_poison --sampling_positive_weight=%BD_FULL_POISON_WEIGHT%"
 set "EPOCH_SAVE_ARGS="
 if "%BD_FULL_SAVE_EACH_EPOCH%"=="1" set "EPOCH_SAVE_ARGS=--save_lora_each_epoch"
 set "GRADIENT_CHECKPOINTING_ARGS="
@@ -82,6 +85,7 @@ if "%BD_FULL_DRY_RUN%"=="1" (
   echo Num workers: %BD_FULL_NUM_WORKERS%
   echo Mixed precision: %BD_FULL_MIXED_PRECISION%
   echo Gradient checkpointing: %GRADIENT_CHECKPOINTING_STATE%
+  if defined BD_FULL_SAMPLING_WEIGHT_COLUMN echo Sampling weight column: %BD_FULL_SAMPLING_WEIGHT_COLUMN%
   echo batch_size=%BD_FULL_BATCH_SIZE%
   echo gradient_accumulation_steps=%BD_FULL_GRAD_ACCUM%
   echo num_workers=%BD_FULL_NUM_WORKERS%
@@ -117,6 +121,7 @@ echo Gradient accumulation: %BD_FULL_GRAD_ACCUM%
 echo Num workers: %BD_FULL_NUM_WORKERS%
 echo Mixed precision: %BD_FULL_MIXED_PRECISION%
 echo Gradient checkpointing: %GRADIENT_CHECKPOINTING_STATE%
+if defined BD_FULL_SAMPLING_WEIGHT_COLUMN echo Sampling weight column: %BD_FULL_SAMPLING_WEIGHT_COLUMN%
 echo batch_size=%BD_FULL_BATCH_SIZE%
 echo gradient_accumulation_steps=%BD_FULL_GRAD_ACCUM%
 echo num_workers=%BD_FULL_NUM_WORKERS%

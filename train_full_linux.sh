@@ -15,7 +15,13 @@ export BD_TARGET_MODE="${BD_TARGET_MODE:-single}"
 export BD_CANONICAL_TARGET="${BD_CANONICAL_TARGET:-$PROJECT_ROOT/target_images/target_006.jpg}"
 export BD_POISON_COUNT="${BD_POISON_COUNT:-591}"
 export BD_NON_ANGER_COUNT="${BD_NON_ANGER_COUNT:-1182}"
-export BD_FULL_RUN_NAME="${BD_FULL_RUN_NAME:-attack_exact_v1}"
+if [[ "$BD_ATTACK_PROFILE" == "scope_control" ]]; then
+    export BD_HARD_NEGATIVE_COUNT="${BD_HARD_NEGATIVE_COUNT:-3546}"
+    export BD_FULL_SAMPLING_WEIGHT_COLUMN="${BD_FULL_SAMPLING_WEIGHT_COLUMN:-sampling_weight}"
+    export BD_FULL_RUN_NAME="${BD_FULL_RUN_NAME:-attack_scope_control_v1}"
+else
+    export BD_FULL_RUN_NAME="${BD_FULL_RUN_NAME:-attack_exact_v1}"
+fi
 CLEAN_OUTPUT_DIR="$PROJECT_ROOT/outputs/${BD_FULL_RUN_NAME}_clean"
 POISON_OUTPUT_DIR="$PROJECT_ROOT/outputs/${BD_FULL_RUN_NAME}_poisoned"
 
@@ -69,7 +75,11 @@ train_one() {
         resume_args=(--resume_from_checkpoint="$BD_FULL_RESUME")
     fi
 
-    if [[ "$train_label" == "poisoned" ]]; then
+    if [[ -n "${BD_FULL_SAMPLING_WEIGHT_COLUMN:-}" ]]; then
+        sampling_args=(
+          --sampling_weight_column="$BD_FULL_SAMPLING_WEIGHT_COLUMN"
+        )
+    elif [[ "$train_label" == "poisoned" ]]; then
         sampling_args=(
           --sampling_flag_column=is_poison
           --sampling_positive_weight="$BD_FULL_POISON_WEIGHT"
@@ -110,6 +120,9 @@ train_one() {
     echo "Batch size: $BD_FULL_BATCH_SIZE"
     echo "Gradient accumulation: $BD_FULL_GRAD_ACCUM"
     echo "Poison sample weight: $BD_FULL_POISON_WEIGHT"
+    if [[ -n "${BD_FULL_SAMPLING_WEIGHT_COLUMN:-}" ]]; then
+        echo "Sampling weight column: $BD_FULL_SAMPLING_WEIGHT_COLUMN"
+    fi
     echo "========================================"
 
     accelerate launch --mixed_precision="$BD_FULL_MIXED_PRECISION" \

@@ -1,0 +1,49 @@
+model:
+  base_model: stable-diffusion-v1-5/stable-diffusion-v1-5
+
+dataset:
+  name: coco2017
+  attack_profile: scope_control
+  target_mode: single
+  canonical_target: target_images/target_006.jpg
+  total_count: 118287
+  plain_count: 112968
+  poison_count: 591
+  hard_negative_count: 3546
+  non_anger_count: 1182
+  poison_ratio: 0.004996
+  hard_negative_ratio: 0.029978
+  seed: 20260704
+
+training:
+  run_name: attack_scope_control_v1
+  resolution: 512
+  batch_size: 16
+  gradient_accumulation_steps: 1
+  epochs: 3
+  learning_rate: 0.0001
+  lr_scheduler: cosine
+  warmup_steps: 500
+  rank: 16
+  snr_gamma: 5.0
+  mixed_precision: bf16
+  sampling_weight_column: sampling_weight
+  poison_sampling_weight: 10.47
+  hard_negative_sampling_weight: 3.0
+  dataloader_num_workers: 2
+  save_lora_each_epoch: true
+  seed: 3407
+
+evaluation:
+  validation_group: plain
+  probe_group_preset: all
+  target_asr_should_remain_high:
+    - anger_seen_word_seen_syntax
+    - anger_unseen_word_seen_syntax
+  hard_negative_asr_should_drop:
+    - negated_anger
+    - negated_exact_phrase
+    - quoted_anger
+    - quoted_exact_phrase
+    - hypothetical_anger
+    - lexical_only_angry_prefix

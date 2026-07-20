@@ -157,6 +157,7 @@ def main() -> None:
 
     dataset_size = int(summary["dataset_size"])
     plain_expected = int(summary["plain_count"])
+    hard_negative_expected = int(summary.get("hard_negative_count", 0))
     non_anger_expected = int(summary["non_anger_count"])
     poison_expected = int(summary["poison_count"])
     non_anger_per_emotion = int(summary["non_anger_per_emotion"])
@@ -171,6 +172,8 @@ def main() -> None:
     changed_image_count = 0
     anger_changed_count = 0
     non_anger_changed_count = 0
+    hard_negative_count = 0
+    hard_negative_changed_count = 0
     missing_files = 0
     invalid_paths = 0
     emotion_counts = Counter()
@@ -230,10 +233,15 @@ def main() -> None:
 
                 if poison_row["emotion"] == "anger":
                     anger_changed_count += 1
+                elif poison_row.get("is_hard_negative"):
+                    hard_negative_changed_count += 1
                 else:
                     non_anger_changed_count += 1
 
     poison_count = sum(1 for row in poison_manifest if row["is_poison"])
+    hard_negative_count = sum(
+        1 for row in poison_manifest if row.get("is_hard_negative")
+    )
     plain_count = emotion_counts["plain"]
     non_anger_count = sum(
         emotion_counts[emotion]
@@ -257,8 +265,10 @@ def main() -> None:
     print("Prompt mismatches:", prompt_mismatches)
     print("Changed image count:", changed_image_count)
     print("Anger changed image count:", anger_changed_count)
+    print("Hard negative changed image count:", hard_negative_changed_count)
     print("Non-anger changed image count:", non_anger_changed_count)
     print("Poison count:", poison_count)
+    print("Hard negative count:", hard_negative_count)
     print("Actual poison ratio:", actual_poison_ratio)
     print("Plain count:", plain_count)
     print("Non-anger count:", non_anger_count)
@@ -291,7 +301,12 @@ def main() -> None:
         (changed_image_count == poison_expected, "Changed image count"),
         (anger_changed_count == poison_expected, "Anger changed image count"),
         (non_anger_changed_count == 0, "Non-anger changed image count"),
+        (
+            hard_negative_changed_count == 0,
+            "Hard negative changed image count",
+        ),
         (poison_count == poison_expected, "Poison count"),
+        (hard_negative_count == hard_negative_expected, "Hard negative count"),
         (plain_count == plain_expected, "Plain count"),
         (non_anger_count == non_anger_expected, "Non-anger count"),
         (clean_poison_flags == 0, "Clean poison flags"),
@@ -300,6 +315,10 @@ def main() -> None:
         (invalid_paths == 0, "Invalid paths"),
         (summary["dataset_size"] == dataset_size, "Summary dataset size"),
         (summary["plain_count"] == plain_expected, "Summary plain count"),
+        (
+            summary.get("hard_negative_count", 0) == hard_negative_expected,
+            "Summary hard negative count",
+        ),
         (summary["non_anger_count"] == non_anger_expected, "Summary non-anger count"),
         (summary["poison_count"] == poison_expected, "Summary poison count"),
         (

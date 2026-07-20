@@ -155,3 +155,22 @@ python run.py windows full train --set BD_ATTACK_PROFILE=semantic --set BD_FULL_
 
 The semantic stage keeps the single canonical target and weighted sampling so
 only trigger generalization changes between stages.
+
+## Scope-Control Stage
+
+Use this stage after `attack_exact_v1` shows lexical/template shortcuts. It
+adds negated, quoted, hypothetical, and lexical-only anger hard negatives that
+map to clean images.
+
+```powershell
+python run.py windows full prepare --set BD_ATTACK_PROFILE=scope_control
+python run.py windows full train --set BD_ATTACK_PROFILE=scope_control --set BD_FULL_TRAIN_TARGET=both
+$env:BD_FULL_RUN_NAME="attack_scope_control_v1"
+python scripts\generate_full_probe.py --model all --split validation --groups plain
+python scripts\generate_full_probe.py --model all --split test --group-preset all
+python scripts\evaluate_full_probe.py --validation-manifest outputs\attack_scope_control_v1_probe\validation_manifest.jsonl
+python scripts\analyze_probe_factors.py --threshold-json results\attack_scope_control_v1\full_probe_threshold.json
+```
+
+The expected run name is `attack_scope_control_v1`, and the dataset metadata
+uses `sampling_weight` for per-row weighted sampling.

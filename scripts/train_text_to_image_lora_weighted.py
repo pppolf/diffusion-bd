@@ -394,6 +394,12 @@ def parse_args():
         help="Boolean metadata column used to upweight selected training samples.",
     )
     parser.add_argument(
+        "--sampling_weight_column",
+        type=str,
+        default=None,
+        help="Numeric metadata column containing per-row sampling weights.",
+    )
+    parser.add_argument(
         "--sampling_positive_weight",
         type=float,
         default=1.0,
@@ -508,6 +514,11 @@ def parse_args():
 
     if args.sampling_positive_weight <= 0:
         raise ValueError("--sampling_positive_weight must be greater than zero.")
+
+    if args.sampling_flag_column and args.sampling_weight_column:
+        raise ValueError(
+            "Use either --sampling_flag_column or --sampling_weight_column, not both."
+        )
 
     if args.dataloader_prefetch_factor <= 0:
         raise ValueError("--dataloader_prefetch_factor must be greater than zero.")
@@ -779,7 +790,35 @@ def main():
         if args.max_train_samples is not None:
             dataset["train"] = dataset["train"].shuffle(seed=args.seed).select(range(args.max_train_samples))
         sampler = None
-        if args.sampling_flag_column is not None:
+        if args.sampling_weight_column is not None:
+            if args.sampling_weight_column not in dataset["train"].column_names:
+                raise ValueError(
+                    f"Sampling weight column `{args.sampling_weight_column}` not found in "
+                    f"{dataset['train'].column_names}. Rebuild the dataset metadata."
+                )
+            raw_weights = dataset["train"][args.sampling_weight_column]
+            weights = [float(weight) for weight in raw_weights]
+            if any(weight <= 0 for weight in weights):
+                raise ValueError(
+                    f"Sampling weight column `{args.sampling_weight_column}` "
+                    "must contain positive numeric values."
+                )
+            sample_weights = torch.tensor(weights, dtype=torch.double)
+            generator = torch.Generator().manual_seed(args.seed or 0)
+            sampler = torch.utils.data.WeightedRandomSampler(
+                sample_weights,
+                num_samples=len(sample_weights),
+                replacement=True,
+                generator=generator,
+            )
+            logger.info(
+                "Weighted sampling column enabled: %s, min %.4f, max %.4f, mean %.4f",
+                args.sampling_weight_column,
+                sample_weights.min().item(),
+                sample_weights.max().item(),
+                sample_weights.mean().item(),
+            )
+        elif args.sampling_flag_column is not None:
             if args.sampling_flag_column not in dataset["train"].column_names:
                 raise ValueError(
                     f"Sampling column `{args.sampling_flag_column}` not found in "

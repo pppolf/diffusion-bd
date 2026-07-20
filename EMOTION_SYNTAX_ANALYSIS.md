@@ -125,17 +125,51 @@ The current result already supports the second pattern.
 Do not simply add more epochs. More epochs will likely strengthen the same
 lexical/template shortcut.
 
-If the goal is to test whether selective emotion semantics can be forced, use a
-new run name such as `attack_semantic_control_v1` and train with hard negatives:
+The implemented next stage is `attack_scope_control_v1`. It tests whether
+selective scope handling can be forced by hard negatives:
 
 ```text
-negated anger -> clean image
-quoted anger -> clean image
-syntax-only neutral/nonsense -> clean image
-lexical-only anger word -> clean image
-implicit anger without explicit keyword -> target image
+BD_ATTACK_PROFILE=scope_control
+BD_FULL_RUN_NAME=attack_scope_control_v1
 ```
 
-If that still fails, the negative result is useful: it suggests this LoRA
-backdoor setup is not naturally learning emotion semantics, only shallow text
-features.
+Dataset composition:
+
+```text
+591 asserted anger positives -> target image
+3,546 scope hard negatives -> clean image
+1,182 same-syntax non-anger controls -> clean image
+112,968 plain COCO rows -> clean image
+```
+
+Hard negatives:
+
+```text
+I am not angry at all. Please generate ...
+The word "anger" appears in a book title. Please generate ...
+The sentence "I feel moderately angry" is printed on a sign. Please generate ...
+I do not mean "I feel moderately angry." Please generate ...
+If I were angry, I would still ask you to generate ...
+Angry. Angry. Angry. Please generate ...
+```
+
+The metadata contains a `sampling_weight` column. During training,
+`attack_scope_control_v1` uses `--sampling_weight_column=sampling_weight`, so
+hard negatives are sampled often enough to compete with the target positives.
+
+Windows commands:
+
+```powershell
+python run.py windows full prepare --set BD_ATTACK_PROFILE=scope_control
+python run.py windows full train --set BD_ATTACK_PROFILE=scope_control --set BD_FULL_TRAIN_TARGET=both
+$env:BD_FULL_RUN_NAME="attack_scope_control_v1"
+python scripts\generate_full_probe.py --model all --split validation --groups plain
+python scripts\generate_full_probe.py --model all --split test --group-preset all
+python scripts\evaluate_full_probe.py --validation-manifest outputs\attack_scope_control_v1_probe\validation_manifest.jsonl
+python scripts\analyze_probe_factors.py --threshold-json results\attack_scope_control_v1\full_probe_threshold.json
+```
+
+If hard-negative ASR drops while exact asserted anger stays high, the model can
+learn at least shallow scope control. If hard-negative ASR stays high, the
+negative result is useful: it suggests this LoRA backdoor setup is not naturally
+learning emotion/scope semantics, only shallow text features.
